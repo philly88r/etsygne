@@ -491,35 +491,59 @@ function displayPrintAreas(placeholders) {
     return;
   }
   
+  console.log('Placeholders data:', placeholders);
+  
   // Process placeholders from Printify API
   placeholders.forEach((placeholder, index) => {
+    if (!placeholder.position) {
+      console.log('Skipping placeholder without position:', placeholder);
+      return;
+    }
+    
     const areaDiv = document.createElement('div');
     areaDiv.className = 'print-area-item';
-    areaDiv.dataset.areaId = placeholder.position || `area_${index}`;
-    areaDiv.dataset.position = placeholder.position || `area_${index}`;
+    areaDiv.dataset.areaId = placeholder.position;
+    areaDiv.dataset.position = placeholder.position;
     
+    // Capitalize the first letter of the position (e.g., "front" -> "Front")
     const areaTitle = document.createElement('h6');
-    areaTitle.textContent = placeholder.position ? 
-      placeholder.position.charAt(0).toUpperCase() + placeholder.position.slice(1) : 
-      `Print Area ${index + 1}`;
+    areaTitle.textContent = placeholder.position.charAt(0).toUpperCase() + placeholder.position.slice(1);
     
     const areaDescription = document.createElement('p');
     areaDescription.className = 'text-muted small';
-    areaDescription.textContent = `Size: ${placeholder.width}x${placeholder.height} px`;
+    
+    // Show dimensions if available
+    if (placeholder.width && placeholder.height) {
+      areaDescription.textContent = `Size: ${placeholder.width}x${placeholder.height} px`;
+    } else {
+      areaDescription.textContent = 'Dimensions not available';
+    }
     
     areaDiv.appendChild(areaTitle);
     areaDiv.appendChild(areaDescription);
     
+    // Add a design indicator to show if a design is assigned
+    const designIndicator = document.createElement('div');
+    designIndicator.className = 'design-indicator d-none';
+    designIndicator.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i> Design assigned';
+    areaDiv.appendChild(designIndicator);
+    
+    // Add button to assign design if a design is selected
     if (selectedDesignId) {
       const useDesignBtn = document.createElement('button');
       useDesignBtn.className = 'btn btn-sm btn-outline-primary';
       useDesignBtn.textContent = 'Use Selected Design';
-      useDesignBtn.onclick = () => assignDesignToPrintArea(placeholder.position || `area_${index}`);
+      useDesignBtn.onclick = () => assignDesignToPrintArea(placeholder.position);
       areaDiv.appendChild(useDesignBtn);
     }
     
     printAreasList.appendChild(areaDiv);
   });
+  
+  // If no print areas were displayed, show a message
+  if (printAreasList.children.length === 0) {
+    printAreasList.innerHTML = '<div class="alert alert-warning">No valid print areas found for this product.</div>';
+  }
 }
 
 // Assign Design to Print Area
@@ -606,6 +630,10 @@ function displayVariants(variants) {
     return;
   }
   
+  // Debug the structure of the first variant
+  console.log('First variant structure:', variantsArray[0]);
+  console.log('Variant properties:', Object.keys(variantsArray[0]));
+  
   // Extract placeholders from the first variant (they should be the same for all variants)
   if (variantsArray[0] && variantsArray[0].placeholders) {
     currentPlaceholders = variantsArray[0].placeholders;
@@ -617,6 +645,12 @@ function displayVariants(variants) {
   }
   
   variantsArray.forEach(variant => {
+    // Skip variants without necessary information
+    if (!variant.id) {
+      console.log('Skipping invalid variant:', variant);
+      return;
+    }
+    
     const variantDiv = document.createElement('div');
     variantDiv.className = 'variant-item d-flex align-items-center';
     
@@ -630,9 +664,8 @@ function displayVariants(variants) {
     const label = document.createElement('label');
     label.className = 'form-check-label flex-grow-1';
     
-    // Just use the title as provided by Printify
-    // The title already contains the variant information (e.g., "Solid Dark Gray / S")
-    label.textContent = variant.title || '';
+    // According to Printify API docs, variant.title already contains the human-readable description
+    label.textContent = variant.title || `Variant ${variant.id}`;
     
     const priceInput = document.createElement('input');
     priceInput.type = 'number';
@@ -640,17 +673,22 @@ function displayVariants(variants) {
     priceInput.min = '0';
     priceInput.step = '0.01';
     
-    // Set default price based on price if available, otherwise use cost or default
-    if (variant.price) {
-      // Convert from cents to dollars if price is in cents
-      const price = variant.price > 100 ? (variant.price / 100).toFixed(2) : variant.price.toFixed(2);
-      priceInput.value = price;
-    } else if (variant.cost) {
-      priceInput.value = (variant.cost * 2).toFixed(2); // Default price is 2x cost
+    // Set price based on variant data
+    let price;
+    
+    if (typeof variant.price === 'number') {
+      // According to API docs, price is in cents
+      // Convert from cents to dollars (e.g. 1000 = $10.00)
+      price = (variant.price / 100).toFixed(2);
+    } else if (typeof variant.cost === 'number') {
+      // If no price but has cost, use 2x markup
+      price = (variant.cost * 2).toFixed(2);
     } else {
-      priceInput.value = '19.99'; // Default fallback price
+      // Default fallback price
+      price = '19.99';
     }
     
+    priceInput.value = price;
     priceInput.dataset.variantId = variant.id;
     
     variantDiv.appendChild(checkbox);
@@ -659,46 +697,34 @@ function displayVariants(variants) {
     
     variantsList.appendChild(variantDiv);
   });
-}
-
-// Handle Product Creation
-async function handleProductCreation(event) {
-  event.preventDefault();
   
-  if (!selectedShopId || !printifyApiKey || !selectedDesignId) {
-    alert('Please select a shop, verify your API key, and upload a design before creating a product.');
-    return;
+  // If no variants were displayed, show a message
+  if (variantsList.children.length === 0) {
+    variantsList.innerHTML = '<div class="alert alert-warning">No valid variants found for this product.</div>';
   }
-  
-  const title = document.getElementById('productTitle').value;
-  const description = document.getElementById('productDescription').value;
-  const blueprintId = parseInt(blueprintSelect.value);
-  const printProviderId = parseInt(providerSelect.value);
-  
-  // Get selected variants and their prices
+}
   const variantCheckboxes = document.querySelectorAll('.variant-item input[type="checkbox"]:checked');
-  const variantPrices = document.querySelectorAll('.variant-item input[type="number"]');
   
   if (variantCheckboxes.length === 0) {
     alert('Please select at least one variant.');
     return;
   }
   
-  const variants = [];
   variantCheckboxes.forEach(checkbox => {
-    const variantId = parseInt(checkbox.dataset.variantId);
-    const priceInput = Array.from(variantPrices).find(input => parseInt(input.dataset.variantId) === variantId);
+    const variantId = checkbox.dataset.variantId;
+    const priceInput = document.querySelector(`.variant-price[data-variant-id="${variantId}"]`);
+    const price = parseFloat(priceInput.value) * 100; // Convert to cents for API
     
-    variants.push({
-      variantId: variantId,
-      price: parseFloat(priceInput.value),
-      isEnabled: true
+    selectedVariants.push({
+      id: parseInt(variantId),
+      price: price,
+      is_enabled: true
     });
   });
   
   // Get print areas with assigned designs
   const printAreasWithDesigns = {};
-  const designIndicators = document.querySelectorAll('.design-indicator');
+  const designIndicators = document.querySelectorAll('.design-indicator:not(.d-none)');
   
   if (designIndicators.length === 0) {
     alert('Please assign your design to at least one print area.');
@@ -707,31 +733,39 @@ async function handleProductCreation(event) {
   
   designIndicators.forEach(indicator => {
     const areaItem = indicator.closest('.print-area-item');
-    const areaId = areaItem.dataset.areaId;
     const position = areaItem.dataset.position;
+    
+    if (!position) {
+      console.error('Missing position for print area:', areaItem);
+      return;
+    }
     
     // Find the placeholder that matches this position
     const placeholder = currentPlaceholders.find(p => p.position === position);
     
-    printAreasWithDesigns[areaId] = {
-      position: 'center', // Default position
+    if (!placeholder) {
+      console.error('Could not find placeholder for position:', position);
+      return;
+    }
+    
+    printAreasWithDesigns[position] = {
+      position: position,
       imageId: selectedDesignId,
-      // Include placeholder dimensions if available
-      ...(placeholder && {
-        width: placeholder.width,
-        height: placeholder.height
-      })
+      // Include placeholder dimensions
+      width: placeholder.width,
+      height: placeholder.height
     };
   });
   
   // Prepare product data
+  // Prepare product data using the exact field names required by the Printify API
   const productData = {
     title,
     description,
-    blueprintId,
-    printProviderId,
-    variants,
-    printAreas: printAreasWithDesigns
+    blueprint_id: blueprintId,
+    print_provider_id: printProviderId,
+    variants: selectedVariants,
+    print_areas: Object.values(printAreasWithDesigns)
   };
   
   try {

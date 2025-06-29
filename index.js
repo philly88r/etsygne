@@ -147,8 +147,21 @@ app.get('/api/catalog/blueprints/:blueprintId/print_providers/:providerId/varian
   
   try {
     const variants = await printifyRequest(`/catalog/blueprints/${blueprintId}/print_providers/${providerId}/variants.json`, 'GET', null, token);
+    
+    // Log the structure of the first variant for debugging
+    if (variants && variants.length > 0) {
+      console.log('First variant example:', JSON.stringify(variants[0], null, 2));
+      console.log('Total variants:', variants.length);
+      console.log('Has cost property:', variants[0].hasOwnProperty('cost'));
+      console.log('Has price property:', variants[0].hasOwnProperty('price'));
+      console.log('Properties:', Object.keys(variants[0]));
+    } else {
+      console.log('No variants returned from Printify API');
+    }
+    
     res.json({ success: true, variants });
   } catch (error) {
+    console.error('Error fetching variants:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
