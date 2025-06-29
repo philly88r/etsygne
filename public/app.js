@@ -611,7 +611,21 @@ function displayVariants(variants) {
     
     const label = document.createElement('label');
     label.className = 'form-check-label flex-grow-1';
-    label.textContent = `${variant.title} (${variant.options.join(', ')})`;
+    
+    // Handle different formats of variant options
+    let optionsText = '';
+    if (variant.options) {
+      if (Array.isArray(variant.options)) {
+        optionsText = variant.options.join(', ');
+      } else if (typeof variant.options === 'object') {
+        // Convert object to array of "key: value" strings
+        optionsText = Object.entries(variant.options)
+          .map(([key, value]) => `${value}`)
+          .join(', ');
+      }
+    }
+    
+    label.textContent = variant.title + (optionsText ? ` (${optionsText})` : '');
     
     const priceInput = document.createElement('input');
     priceInput.type = 'number';
