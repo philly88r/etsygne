@@ -483,25 +483,29 @@ function populatePrintProviders(providers) {
 }
 
 // Display Print Areas
-function displayPrintAreas(printAreas) {
+function displayPrintAreas(placeholders) {
   printAreasList.innerHTML = '';
   
-  if (!printAreas || Object.keys(printAreas).length === 0) {
+  if (!placeholders || placeholders.length === 0) {
     printAreasList.innerHTML = '<p class="text-muted">No print areas available for this product type</p>';
     return;
   }
   
-  for (const [key, area] of Object.entries(printAreas)) {
+  // Process placeholders from Printify API
+  placeholders.forEach((placeholder, index) => {
     const areaDiv = document.createElement('div');
     areaDiv.className = 'print-area-item';
-    areaDiv.dataset.areaId = key;
+    areaDiv.dataset.areaId = placeholder.position || `area_${index}`;
+    areaDiv.dataset.position = placeholder.position || `area_${index}`;
     
     const areaTitle = document.createElement('h6');
-    areaTitle.textContent = area.title || key;
+    areaTitle.textContent = placeholder.position ? 
+      placeholder.position.charAt(0).toUpperCase() + placeholder.position.slice(1) : 
+      `Print Area ${index + 1}`;
     
     const areaDescription = document.createElement('p');
     areaDescription.className = 'text-muted small';
-    areaDescription.textContent = `Size: ${area.width}x${area.height} ${area.width_unit || 'px'}`;
+    areaDescription.textContent = `Size: ${placeholder.width}x${placeholder.height} px`;
     
     areaDiv.appendChild(areaTitle);
     areaDiv.appendChild(areaDescription);
@@ -510,12 +514,12 @@ function displayPrintAreas(printAreas) {
       const useDesignBtn = document.createElement('button');
       useDesignBtn.className = 'btn btn-sm btn-outline-primary';
       useDesignBtn.textContent = 'Use Selected Design';
-      useDesignBtn.onclick = () => assignDesignToPrintArea(key);
+      useDesignBtn.onclick = () => assignDesignToPrintArea(placeholder.position || `area_${index}`);
       areaDiv.appendChild(useDesignBtn);
     }
     
     printAreasList.appendChild(areaDiv);
-  }
+  });
 }
 
 // Assign Design to Print Area
@@ -580,11 +584,15 @@ async function loadVariants() {
   }
 }
 
+// Global variable to store placeholders from variants
+let currentPlaceholders = [];
+
 // Display Variants
 function displayVariants(variants) {
   variantsList.innerHTML = '';
+  console.log('Variants data received:', variants); // Debug log
   
-  // Check if variants exists and is iterable
+  // Check if variants exists
   if (!variants) {
     variantsList.innerHTML = '<p class="text-muted">No variants available for this product and provider</p>';
     return;
@@ -596,6 +604,16 @@ function displayVariants(variants) {
   if (variantsArray.length === 0) {
     variantsList.innerHTML = '<p class="text-muted">No variants available for this product and provider</p>';
     return;
+  }
+  
+  // Extract placeholders from the first variant (they should be the same for all variants)
+  if (variantsArray[0] && variantsArray[0].placeholders) {
+    currentPlaceholders = variantsArray[0].placeholders;
+    // After extracting placeholders, display them as print areas
+    displayPrintAreas(currentPlaceholders);
+  } else {
+    currentPlaceholders = [];
+    printAreasList.innerHTML = '<p class="text-muted">No print areas available for this product</p>';
   }
   
   variantsArray.forEach(variant => {
@@ -612,27 +630,27 @@ function displayVariants(variants) {
     const label = document.createElement('label');
     label.className = 'form-check-label flex-grow-1';
     
-    // Handle different formats of variant options
-    let optionsText = '';
-    if (variant.options) {
-      if (Array.isArray(variant.options)) {
-        optionsText = variant.options.join(', ');
-      } else if (typeof variant.options === 'object') {
-        // Convert object to array of "key: value" strings
-        optionsText = Object.entries(variant.options)
-          .map(([key, value]) => `${value}`)
-          .join(', ');
-      }
-    }
-    
-    label.textContent = variant.title + (optionsText ? ` (${optionsText})` : '');
+    // Just use the title as provided by Printify
+    // The title already contains the variant information (e.g., "Solid Dark Gray / S")
+    label.textContent = variant.title || '';
     
     const priceInput = document.createElement('input');
     priceInput.type = 'number';
     priceInput.className = 'form-control form-control-sm variant-price';
     priceInput.min = '0';
     priceInput.step = '0.01';
-    priceInput.value = (variant.cost * 2).toFixed(2); // Default price is 2x cost
+    
+    // Set default price based on price if available, otherwise use cost or default
+    if (variant.price) {
+      // Convert from cents to dollars if price is in cents
+      const price = variant.price > 100 ? (variant.price / 100).toFixed(2) : variant.price.toFixed(2);
+      priceInput.value = price;
+    } else if (variant.cost) {
+      priceInput.value = (variant.cost * 2).toFixed(2); // Default price is 2x cost
+    } else {
+      priceInput.value = '19.99'; // Default fallback price
+    }
+    
     priceInput.dataset.variantId = variant.id;
     
     variantDiv.appendChild(checkbox);
@@ -690,10 +708,19 @@ async function handleProductCreation(event) {
   designIndicators.forEach(indicator => {
     const areaItem = indicator.closest('.print-area-item');
     const areaId = areaItem.dataset.areaId;
+    const position = areaItem.dataset.position;
+    
+    // Find the placeholder that matches this position
+    const placeholder = currentPlaceholders.find(p => p.position === position);
     
     printAreasWithDesigns[areaId] = {
-      position: 'center',
-      imageId: selectedDesignId
+      position: 'center', // Default position
+      imageId: selectedDesignId,
+      // Include placeholder dimensions if available
+      ...(placeholder && {
+        width: placeholder.width,
+        height: placeholder.height
+      })
     };
   });
   
