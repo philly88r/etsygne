@@ -584,12 +584,21 @@ async function loadVariants() {
 function displayVariants(variants) {
   variantsList.innerHTML = '';
   
-  if (!variants || variants.length === 0) {
+  // Check if variants exists and is iterable
+  if (!variants) {
     variantsList.innerHTML = '<p class="text-muted">No variants available for this product and provider</p>';
     return;
   }
   
-  variants.forEach(variant => {
+  // Convert to array if it's an object and not an array
+  const variantsArray = Array.isArray(variants) ? variants : Object.values(variants);
+  
+  if (variantsArray.length === 0) {
+    variantsList.innerHTML = '<p class="text-muted">No variants available for this product and provider</p>';
+    return;
+  }
+  
+  variantsArray.forEach(variant => {
     const variantDiv = document.createElement('div');
     variantDiv.className = 'variant-item d-flex align-items-center';
     
