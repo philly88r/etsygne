@@ -51,14 +51,29 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Setup event listeners
   verifyApiKeyBtn.addEventListener('click', verifyApiKey);
-  shopSelect.addEventListener('change', handleShopSelection);
+  shopSelect.addEventListener('change', function handleShopSelection(e) {
+    selectedShopId = e.target.value;
+    shopIdField.value = selectedShopId;
+  
+    // Enable the create product tab now that we have a shop selected
+    if (selectedShopId) {
+      document.getElementById('create-product-tab').classList.remove('disabled');
+    }
+  });
   generateDesignBtn.addEventListener('click', generateDesign);
   refreshProductsBtn.addEventListener('click', loadProducts);
   blueprintSelect.addEventListener('change', handleBlueprintSelection);
-  providerSelect.addEventListener('change', loadVariants);
-  createProductForm.addEventListener('submit', handleProductCreation);
-  useThisDesignBtn.addEventListener('click', useSelectedDesign);
+  providerSelect.addEventListener('change', handleProviderSelection);
+  createProductBtn.addEventListener('click', createProduct);
   publishProductBtn.addEventListener('click', publishProduct);
+  useThisDesignBtn.addEventListener('click', useSelectedDesign);
+  
+  // Add the 'disabled' class to tabs that require a shop to be selected
+  document.querySelectorAll('.nav-link').forEach(tab => {
+    if (tab.id !== 'api-key-tab') {
+      tab.classList.add('disabled');
+    }
+  });
   
   // Tab change listeners
   document.getElementById('products-tab').addEventListener('click', () => {
@@ -125,16 +140,6 @@ function populateShops(shops) {
     option.textContent = shop.title;
     shopSelect.appendChild(option);
   });
-}
-
-// Handle Shop Selection
-function handleShopSelection() {
-  selectedShopId = shopSelect.value;
-  if (selectedShopId) {
-    mainContent.style.display = 'block';
-    loadProducts();
-    loadBlueprints();
-  }
 }
 
 // Generate Design with Google Imagen 4
@@ -385,47 +390,52 @@ function displayProducts(products) {
 }
 
 // Load Blueprints (Product Types)
-document.getElementById('create-product-tab').addEventListener('click', async () => {
-  if (!selectedShopId) {
-    alert('Please select a shop first');
-    return;
-  }
-  
-  try {
-    console.log('Loading blueprints from:', `${API_BASE}/shops/${selectedShopId}/blueprints`);
-    const response = await fetch(`${API_BASE}/shops/${selectedShopId}/blueprints`, {
-      headers: {
-        'Authorization': `Bearer ${printifyApiKey}`
+document.addEventListener('DOMContentLoaded', function() {
+  const createProductTab = document.getElementById('create-product-tab');
+  if (createProductTab) {
+    createProductTab.addEventListener('click', async () => {
+      if (!selectedShopId) {
+        alert('Please select a shop first');
+        return;
+      }
+      
+      try {
+        console.log('Loading blueprints from:', `${API_BASE}/shops/${selectedShopId}/blueprints`);
+        const response = await fetch(`${API_BASE}/shops/${selectedShopId}/blueprints`, {
+          headers: {
+            'Authorization': `Bearer ${printifyApiKey}`
+          }
+        });
+        
+        console.log('Blueprint response status:', response.status);
+        const data = await response.json();
+        console.log('Blueprint data:', data);
+        
+        if (data.success || data.blueprints) {
+          const blueprintSelect = document.getElementById('blueprint-select');
+          blueprintSelect.innerHTML = '<option value="">Select a product type</option>';
+          
+          const blueprints = data.blueprints || (data.success && data.data) || [];
+          console.log('Processed blueprints:', blueprints);
+          
+          blueprints.forEach(blueprint => {
+            const option = document.createElement('option');
+            option.value = blueprint.id;
+            option.textContent = blueprint.title;
+            blueprintSelect.appendChild(option);
+          });
+          
+          blueprintData = blueprints.reduce((acc, blueprint) => {
+            acc[blueprint.id] = blueprint;
+            return acc;
+          }, {});
+        } else {
+          console.error('Error loading blueprints:', data.message || data.error || 'Unknown error');
+        }
+      } catch (error) {
+        console.error('Error loading blueprints:', error);
       }
     });
-    
-    console.log('Blueprint response status:', response.status);
-    const data = await response.json();
-    console.log('Blueprint data:', data);
-    
-    if (data.success || data.blueprints) {
-      const blueprintSelect = document.getElementById('blueprint-select');
-      blueprintSelect.innerHTML = '<option value="">Select a product type</option>';
-      
-      const blueprints = data.blueprints || (data.success && data.data) || [];
-      console.log('Processed blueprints:', blueprints);
-      
-      blueprints.forEach(blueprint => {
-        const option = document.createElement('option');
-        option.value = blueprint.id;
-        option.textContent = blueprint.title;
-        blueprintSelect.appendChild(option);
-      });
-      
-      blueprintData = blueprints.reduce((acc, blueprint) => {
-        acc[blueprint.id] = blueprint;
-        return acc;
-      }, {});
-    } else {
-      console.error('Error loading blueprints:', data.message || data.error || 'Unknown error');
-    }
-  } catch (error) {
-    console.error('Error loading blueprints:', error);
   }
 });
 
@@ -485,7 +495,10 @@ async function handleBlueprintSelection() {
 }
 
 // Load Print Providers when a blueprint is selected
-document.getElementById('blueprint-select').addEventListener('change', async (e) => {
+document.addEventListener('DOMContentLoaded', function() {
+  const blueprintSelect = document.getElementById('blueprint-select');
+  if (blueprintSelect) {
+    blueprintSelect.addEventListener('change', async (e) => {
   const blueprintId = e.target.value;
   
   if (!blueprintId) return;
@@ -520,6 +533,8 @@ document.getElementById('blueprint-select').addEventListener('change', async (e)
     }
   } catch (error) {
     console.error('Error loading print providers:', error);
+  }
+    });
   }
 });
 
