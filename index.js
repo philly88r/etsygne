@@ -7,7 +7,7 @@ const path = require('path');
 const bodyParser = require('body-parser');
 
 // Configuration
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const PRINTIFY_API_BASE_URL = 'https://api.printify.com/v1';
 const GOOGLE_API_KEY = 'AIzaSyAXvOheDSSeftRXkZgr9mLAkzfAqSOLwFg';
 
