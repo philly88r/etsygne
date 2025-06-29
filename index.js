@@ -146,6 +146,21 @@ app.get('/api/catalog/blueprints/:blueprintId/print_providers/:providerId/varian
   }
   
   try {
+    console.log(`Requesting variants for blueprint ${blueprintId} and provider ${providerId}`);
+    
+    // First, try to get the print areas for this product
+    let printAreas = [];
+    try {
+      const blueprintDetails = await printifyRequest(`/catalog/blueprints/${blueprintId}.json`, 'GET', null, token);
+      if (blueprintDetails && blueprintDetails.print_areas) {
+        printAreas = blueprintDetails.print_areas;
+        console.log(`Found ${printAreas.length} print areas in blueprint details`);
+      }
+    } catch (error) {
+      console.log('Could not fetch print areas from blueprint details:', error.message);
+    }
+    
+    // Now get the variants
     const variants = await printifyRequest(`/catalog/blueprints/${blueprintId}/print_providers/${providerId}/variants.json`, 'GET', null, token);
     
     // Log the structure of the first variant for debugging
@@ -155,11 +170,17 @@ app.get('/api/catalog/blueprints/:blueprintId/print_providers/:providerId/varian
       console.log('Has cost property:', variants[0].hasOwnProperty('cost'));
       console.log('Has price property:', variants[0].hasOwnProperty('price'));
       console.log('Properties:', Object.keys(variants[0]));
+      
+      // Add print areas to the response if we have them
+      if (printAreas.length > 0) {
+        // Add print areas to the first variant so frontend can access them
+        variants[0].placeholders = printAreas;
+      }
     } else {
       console.log('No variants returned from Printify API');
     }
     
-    res.json({ success: true, variants });
+    res.json({ success: true, variants, print_areas: printAreas });
   } catch (error) {
     console.error('Error fetching variants:', error);
     res.status(500).json({ success: false, message: error.message });
