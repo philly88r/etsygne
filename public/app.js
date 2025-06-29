@@ -7,8 +7,10 @@ let currentProduct = null;
 let blueprintData = {};
 let printAreas = {};
 
-// API base URL - automatically detects if we're in production or development
-const API_BASE = window.location.hostname === 'localhost' ? '' : '/.netlify/functions/api';
+// API base URL - dynamically set based on environment
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+  ? `http://${window.location.hostname}:${window.location.port}/api` 
+  : '/api';
 
 // DOM Elements
 const apiKeyInput = document.getElementById('printifyApiKey');
