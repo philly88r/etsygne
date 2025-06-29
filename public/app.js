@@ -630,22 +630,21 @@ function displayVariants(variants) {
     return;
   }
   
-  // Debug the structure of the first variant
-  console.log('First variant structure:', variantsArray[0]);
-  console.log('Variant properties:', Object.keys(variantsArray[0]));
+  console.log('First variant structure:', variantsArray[0]); // Debug log
+  console.log('Variant properties:', Object.keys(variantsArray[0])); // Debug log
   
-  // Extract placeholders from the first variant (they should be the same for all variants)
+  // Check if the first variant has placeholders
   if (variantsArray[0] && variantsArray[0].placeholders) {
     currentPlaceholders = variantsArray[0].placeholders;
-    // After extracting placeholders, display them as print areas
     displayPrintAreas(currentPlaceholders);
   } else {
     currentPlaceholders = [];
     printAreasList.innerHTML = '<p class="text-muted">No print areas available for this product</p>';
   }
   
+  // Process each variant
   variantsArray.forEach(variant => {
-    // Skip variants without necessary information
+    // Skip invalid variants
     if (!variant.id) {
       console.log('Skipping invalid variant:', variant);
       return;
@@ -663,8 +662,6 @@ function displayVariants(variants) {
     
     const label = document.createElement('label');
     label.className = 'form-check-label flex-grow-1';
-    
-    // According to Printify API docs, variant.title already contains the human-readable description
     label.textContent = variant.title || `Variant ${variant.id}`;
     
     const priceInput = document.createElement('input');
@@ -673,7 +670,6 @@ function displayVariants(variants) {
     priceInput.min = '0';
     priceInput.step = '0.01';
     
-    // Set price based on variant data
     let price;
     
     if (typeof variant.price === 'number') {
@@ -703,6 +699,34 @@ function displayVariants(variants) {
     variantsList.innerHTML = '<div class="alert alert-warning">No valid variants found for this product.</div>';
   }
 }
+
+// Handle Product Creation
+async function handleProductCreation(event) {
+  event.preventDefault();
+  
+  if (!printifyApiKey || !selectedShopId) {
+    alert('Please verify your API key and select a shop first.');
+    return;
+  }
+  
+  if (!selectedDesignId) {
+    alert('Please select a design first.');
+    return;
+  }
+  
+  const title = document.getElementById('productTitle').value.trim();
+  const description = document.getElementById('productDescription').value.trim();
+  const blueprintId = blueprintSelect.value;
+  const printProviderId = providerSelect.value;
+  
+  if (!title || !description || !blueprintId || !printProviderId) {
+    alert('Please fill in all required fields.');
+    return;
+  }
+  
+  // Collect selected variants
+  const selectedVariants = [];
+  
   const variantCheckboxes = document.querySelectorAll('.variant-item input[type="checkbox"]:checked');
   
   if (variantCheckboxes.length === 0) {
@@ -757,7 +781,6 @@ function displayVariants(variants) {
     };
   });
   
-  // Prepare product data
   // Prepare product data using the exact field names required by the Printify API
   const productData = {
     title,
