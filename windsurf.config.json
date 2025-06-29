@@ -1,0 +1,12 @@
+{
+  "name": "printify-design-generator",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "startCommand": "npm start",
+  "outputDirectory": "public",
+  "environmentVariables": [
+    "PRINTIFY_API_KEY",
+    "GOOGLE_API_KEY"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "printify-design-generator",
+  "description": "Web application to generate designs with Google Imagen 4 and add them to Printify products",
+  "repository": "https://github.com/yourusername/printify-design-generator",
+  "keywords": ["node", "express", "printify", "google-imagen"],
+  "env": {
+    "GOOGLE_API_KEY": {
+      "description": "Your Google API key for Imagen 4",
+      "value": "AIzaSyAXvOheDSSeftRXkZgr9mLAkzfAqSOLwFg"
+    }
+  }
+}
