@@ -137,76 +137,133 @@ function handleShopSelection() {
   }
 }
 
-// Generate Design with Google Imagen 4
+// Generate Design with Google Imagen 4 - Original function kept for compatibility
 async function generateDesign() {
-  const prompt = designPrompt.value.trim();
+  const prompt = document.getElementById('designPrompt').value.trim();
   if (!prompt) {
-    generationStatus.innerHTML = '<div class="alert alert-danger">Please enter a design description</div>';
+    document.getElementById('generationStatus').innerHTML = '<div class="alert alert-danger">Please enter a design description</div>';
     return;
   }
   
-  generationStatus.innerHTML = '<div class="d-flex align-items-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div> Generating designs...</div>';
-  generateDesignBtn.disabled = true;
+  await generateDesignWithDetails(prompt);
+}
+
+// Generate Design specifically for the selected print area
+async function generateDesignForPrintArea() {
+  const promptElement = document.getElementById('designPrompt');
+  if (!promptElement) {
+    console.error('Design prompt element not found');
+    return;
+  }
+  
+  const prompt = promptElement.value.trim();
+  if (!prompt) {
+    document.getElementById('generationStatus').innerHTML = '<div class="alert alert-danger">Please enter a design description</div>';
+    return;
+  }
+  
+  // Include print area information in the prompt
+  const enhancedPrompt = `${prompt} - Design for ${selectedPrintAreaPosition} placement, optimized for ${selectedPrintAreaWidth}x${selectedPrintAreaHeight} dimensions.`;
+  
+  await generateDesignWithDetails(enhancedPrompt, selectedPrintAreaWidth, selectedPrintAreaHeight);
+}
+
+// Shared design generation function with size parameters
+async function generateDesignWithDetails(prompt, width = selectedPrintAreaWidth, height = selectedPrintAreaHeight) {
+  const statusElement = document.getElementById('generationStatus');
+  const btnElement = document.getElementById('generateDesignBtn');
+  
+  if (!statusElement || !btnElement) {
+    console.error('Required elements not found');
+    return;
+  }
+  
+  statusElement.innerHTML = '<div class="d-flex align-items-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div> Generating designs...</div>';
+  btnElement.disabled = true;
   
   try {
+    console.log(`Generating design with prompt: ${prompt}, size: ${width}x${height}`);
+    
     const response = await fetch(`${API_BASE}/generate-image`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ prompt })
+      body: JSON.stringify({ 
+        prompt, 
+        width, 
+        height,
+        numImages: 1 
+      })
     });
     
     const data = await response.json();
     
     if (data.success || data.images) {
-      generationStatus.innerHTML = '<div class="alert alert-success">Designs generated successfully!</div>';
+      statusElement.innerHTML = '<div class="alert alert-success">Designs generated successfully!</div>';
       displayGeneratedDesigns(data.images || []);
     } else {
-      generationStatus.innerHTML = `<div class="alert alert-danger">Error: ${data.message || data.error || 'Unknown error'}</div>`;
+      statusElement.innerHTML = `<div class="alert alert-danger">Error: ${data.message || data.error || 'Unknown error'}</div>`;
     }
   } catch (error) {
     console.error('Error generating designs:', error);
-    generationStatus.innerHTML = '<div class="alert alert-danger">Error generating designs. Please try again.</div>';
+    statusElement.innerHTML = '<div class="alert alert-danger">Error generating designs. Please try again.</div>';
   } finally {
-    generateDesignBtn.disabled = false;
+    btnElement.disabled = false;
   }
 }
 
 // Display Generated Designs
 function displayGeneratedDesigns(images) {
-  generatedDesigns.innerHTML = '';
+  const designsContainer = document.getElementById('generatedDesigns');
+  if (!designsContainer) {
+    console.error('Generated designs container not found');
+    return;
+  }
   
-  images.forEach((imageUrl, index) => {
-    const colDiv = document.createElement('div');
-    colDiv.className = 'col-md-3 col-sm-6';
+  designsContainer.innerHTML = '';
+  
+  if (!images || images.length === 0) {
+    designsContainer.innerHTML = '<div class="col-12"><div class="alert alert-warning">No designs were generated</div></div>';
+    return;
+  }
+  
+  images.forEach((image, index) => {
+    const col = document.createElement('div');
+    col.className = 'col-md-4 mb-3';
     
-    const cardDiv = document.createElement('div');
-    cardDiv.className = 'card design-card';
-    cardDiv.onclick = () => previewDesign(imageUrl);
-    
-    const imgContainer = document.createElement('div');
-    imgContainer.className = 'design-img-container';
+    const card = document.createElement('div');
+    card.className = 'card h-100';
     
     const img = document.createElement('img');
-    img.className = 'design-img';
-    img.src = imageUrl;
+    img.src = image.url;
+    img.className = 'card-img-top';
     img.alt = `Generated Design ${index + 1}`;
+    img.style.cursor = 'pointer';
+    img.onclick = () => selectDesign(image.url);
     
     const cardBody = document.createElement('div');
-    cardBody.className = 'card-body text-center';
+    cardBody.className = 'card-body';
     
-    const title = document.createElement('h6');
-    title.className = 'card-title mb-0';
-    title.textContent = `Design ${index + 1}`;
+    const selectBtn = document.createElement('button');
+    selectBtn.className = 'btn btn-sm btn-outline-primary';
+    selectBtn.textContent = 'Select Design';
+    selectBtn.onclick = () => selectDesign(image.url);
     
-    imgContainer.appendChild(img);
-    cardBody.appendChild(title);
-    cardDiv.appendChild(imgContainer);
-    cardDiv.appendChild(cardBody);
-    colDiv.appendChild(cardDiv);
+    // Add info about the print area this was generated for
+    if (selectedPrintAreaPosition) {
+      const infoText = document.createElement('p');
+      infoText.className = 'text-muted small mt-2 mb-0';
+      infoText.textContent = `For: ${selectedPrintAreaPosition.charAt(0).toUpperCase() + selectedPrintAreaPosition.slice(1)} (${selectedPrintAreaWidth}x${selectedPrintAreaHeight})`;
+      cardBody.appendChild(infoText);
+    }
     
-    generatedDesigns.appendChild(colDiv);
+    cardBody.appendChild(selectBtn);
+    card.appendChild(img);
+    card.appendChild(cardBody);
+    col.appendChild(card);
+    
+    designsContainer.appendChild(col);
   });
 }
 
@@ -563,6 +620,19 @@ function selectPrintArea(areaId, position, clickedElement) {
   selectedPrintAreaId = areaId;
   console.log(`Selected print area: ${areaId}, position: ${position}`);
   
+  // Store the selected print area dimensions
+  const selectedPlaceholder = currentPlaceholders.find(p => {
+    const placeholderId = p.id || p.placeholder_id || p.print_area_id;
+    return placeholderId === areaId;
+  });
+  
+  if (selectedPlaceholder) {
+    selectedPrintAreaWidth = selectedPlaceholder.width || 1000;
+    selectedPrintAreaHeight = selectedPlaceholder.height || 1000;
+    selectedPrintAreaPosition = position || 'front';
+    console.log(`Print area dimensions: ${selectedPrintAreaWidth}x${selectedPrintAreaHeight}`);
+  }
+  
   // Update UI to show selection
   const allAreas = document.querySelectorAll('.print-area-item');
   allAreas.forEach(area => {
@@ -575,6 +645,61 @@ function selectPrintArea(areaId, position, clickedElement) {
   clickedElement.classList.add('border-primary');
   const badge = clickedElement.querySelector('.selection-indicator .badge');
   if (badge) badge.classList.remove('d-none');
+  
+  // Show the design generation form directly under this print area
+  const designGenSection = document.getElementById('designGenSection');
+  if (designGenSection) {
+    // Remove it from its current location
+    designGenSection.remove();
+    
+    // Create a new container for it
+    const designGenContainer = document.createElement('div');
+    designGenContainer.id = 'designGenSection';
+    designGenContainer.className = 'mt-3 p-3 border rounded bg-light';
+    
+    // Add title with print area information
+    const title = document.createElement('h5');
+    title.textContent = `Generate Design for ${position.charAt(0).toUpperCase() + position.slice(1)}`;
+    designGenContainer.appendChild(title);
+    
+    // Add size information
+    const sizeInfo = document.createElement('p');
+    sizeInfo.className = 'text-muted small';
+    sizeInfo.textContent = `Target size: ${selectedPrintAreaWidth}x${selectedPrintAreaHeight} px`;
+    designGenContainer.appendChild(sizeInfo);
+    
+    // Add the prompt input
+    const promptGroup = document.createElement('div');
+    promptGroup.className = 'mb-3';
+    promptGroup.innerHTML = `
+      <label for="designPrompt" class="form-label">Design Description</label>
+      <textarea id="designPrompt" class="form-control" rows="3" placeholder="Describe the design you want to generate..."></textarea>
+    `;
+    designGenContainer.appendChild(promptGroup);
+    
+    // Add the generate button
+    const generateBtn = document.createElement('button');
+    generateBtn.id = 'generateDesignBtn';
+    generateBtn.className = 'btn btn-primary';
+    generateBtn.textContent = 'Generate Design';
+    generateBtn.onclick = () => generateDesignForPrintArea();
+    designGenContainer.appendChild(generateBtn);
+    
+    // Add status area
+    const statusDiv = document.createElement('div');
+    statusDiv.id = 'generationStatus';
+    statusDiv.className = 'mt-3';
+    designGenContainer.appendChild(statusDiv);
+    
+    // Add designs container
+    const designsContainer = document.createElement('div');
+    designsContainer.id = 'generatedDesigns';
+    designsContainer.className = 'mt-3 row';
+    designGenContainer.appendChild(designsContainer);
+    
+    // Add the design generation section after the clicked print area
+    clickedElement.after(designGenContainer);
+  }
   
   // If we have a design selected, show assign button
   if (selectedDesignUrl) {
@@ -709,6 +834,8 @@ async function loadVariants() {
 let currentPlaceholders = [];
 let selectedPrintAreaId = null;
 let selectedPrintAreaPosition = null;
+let selectedPrintAreaWidth = 1000;
+let selectedPrintAreaHeight = 1000;
 
 // Display Variants
 function displayVariants(variantData) {

@@ -272,7 +272,7 @@ app.post('/api/images/upload', async (req, res) => {
 
 // Generate image with Google Imagen API
 app.post('/api/generate-image', async (req, res) => {
-  const { prompt, numImages = 1 } = req.body;
+  const { prompt, numImages = 1, width = 1000, height = 1000 } = req.body;
   
   if (!prompt) {
     return res.status(400).json({ error: 'Prompt is required' });
@@ -281,6 +281,8 @@ app.post('/api/generate-image', async (req, res) => {
   if (!GOOGLE_API_KEY) {
     return res.status(500).json({ error: 'Google API key is not configured' });
   }
+  
+  console.log(`Generating image with prompt: ${prompt}, size: ${width}x${height}, numImages: ${numImages}`);
   
   // Set up the API call to Google Imagen using the correct format for Imagen 4
   // Use API key as query parameter instead
@@ -294,10 +296,12 @@ app.post('/api/generate-image', async (req, res) => {
     }
   };
   
-  // Use correct request format for Imagen
+  // Use correct request format for Imagen with size parameters
   const postData = JSON.stringify({
     prompt: prompt,
-    number_of_images: numImages || 1
+    number_of_images: numImages || 1,
+    width: width || 1000,
+    height: height || 1000
   });
   
   try {
