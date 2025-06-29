@@ -495,19 +495,28 @@ function displayPrintAreas(placeholders) {
   
   // Process placeholders from Printify API
   placeholders.forEach((placeholder, index) => {
-    if (!placeholder.position) {
+    // Get position from any possible property
+    const position = placeholder.position || placeholder.placement || `area-${index}`;
+    // Get ID from any possible property
+    const areaId = placeholder.id || placeholder.placeholder_id || placeholder.print_area_id || position;
+    
+    if (!position) {
       console.log('Skipping placeholder without position:', placeholder);
       return;
     }
     
     const areaDiv = document.createElement('div');
-    areaDiv.className = 'print-area-item';
-    areaDiv.dataset.areaId = placeholder.position;
-    areaDiv.dataset.position = placeholder.position;
+    areaDiv.className = 'print-area-item card mb-3 p-2';
+    areaDiv.dataset.areaId = areaId;
+    areaDiv.dataset.position = position;
+    
+    // Make the entire area clickable for selection
+    areaDiv.style.cursor = 'pointer';
+    areaDiv.onclick = () => selectPrintArea(areaId, position, areaDiv);
     
     // Capitalize the first letter of the position (e.g., "front" -> "Front")
     const areaTitle = document.createElement('h6');
-    areaTitle.textContent = placeholder.position.charAt(0).toUpperCase() + placeholder.position.slice(1);
+    areaTitle.textContent = position.charAt(0).toUpperCase() + position.slice(1);
     
     const areaDescription = document.createElement('p');
     areaDescription.className = 'text-muted small';
@@ -516,27 +525,29 @@ function displayPrintAreas(placeholders) {
     if (placeholder.width && placeholder.height) {
       areaDescription.textContent = `Size: ${placeholder.width}x${placeholder.height} px`;
     } else {
-      areaDescription.textContent = 'Dimensions not available';
+      areaDescription.textContent = 'Print area dimensions will be determined by the product';
     }
     
-    areaDiv.appendChild(areaTitle);
-    areaDiv.appendChild(areaDescription);
+    // Create a selection indicator
+    const selectionIndicator = document.createElement('div');
+    selectionIndicator.className = 'selection-indicator';
+    selectionIndicator.innerHTML = '<span class="badge bg-primary d-none">Selected</span>';
+    
+    // Create container for the content
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'card-body p-2';
+    
+    contentDiv.appendChild(areaTitle);
+    contentDiv.appendChild(areaDescription);
+    contentDiv.appendChild(selectionIndicator);
     
     // Add a design indicator to show if a design is assigned
     const designIndicator = document.createElement('div');
-    designIndicator.className = 'design-indicator d-none';
-    designIndicator.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i> Design assigned';
-    areaDiv.appendChild(designIndicator);
+    designIndicator.className = 'design-indicator d-none mt-2';
+    designIndicator.innerHTML = '<div class="alert alert-success py-1 px-2 mb-0"><i class="bi bi-check-circle-fill"></i> Design assigned</div>';
+    contentDiv.appendChild(designIndicator);
     
-    // Add button to assign design if a design is selected
-    if (selectedDesignId) {
-      const useDesignBtn = document.createElement('button');
-      useDesignBtn.className = 'btn btn-sm btn-outline-primary';
-      useDesignBtn.textContent = 'Use Selected Design';
-      useDesignBtn.onclick = () => assignDesignToPrintArea(placeholder.position);
-      areaDiv.appendChild(useDesignBtn);
-    }
-    
+    areaDiv.appendChild(contentDiv);
     printAreasList.appendChild(areaDiv);
   });
   
@@ -546,33 +557,89 @@ function displayPrintAreas(placeholders) {
   }
 }
 
-// Assign Design to Print Area
-function assignDesignToPrintArea(areaId) {
-  const areaElements = document.querySelectorAll('.print-area-item');
+// Select Print Area
+function selectPrintArea(areaId, position, clickedElement) {
+  // Update the global selected print area ID
+  selectedPrintAreaId = areaId;
+  console.log(`Selected print area: ${areaId}, position: ${position}`);
   
-  areaElements.forEach(el => {
-    if (el.dataset.areaId === areaId) {
-      el.classList.add('border-primary');
-      
-      // Remove any existing design indicator
-      const existingIndicator = el.querySelector('.design-indicator');
-      if (existingIndicator) {
-        existingIndicator.remove();
-      }
-      
-      // Add design indicator
-      const designIndicator = document.createElement('div');
-      designIndicator.className = 'design-indicator mt-2';
-      designIndicator.innerHTML = `
-        <p class="text-success mb-1"><strong>Design assigned!</strong></p>
-        <img src="${selectedDesignUrl}" class="print-area-img" alt="Assigned Design">
-      `;
-      
-      el.appendChild(designIndicator);
-    } else {
-      el.classList.remove('border-primary');
-    }
+  // Update UI to show selection
+  const allAreas = document.querySelectorAll('.print-area-item');
+  allAreas.forEach(area => {
+    area.classList.remove('border-primary');
+    const badge = area.querySelector('.selection-indicator .badge');
+    if (badge) badge.classList.add('d-none');
   });
+  
+  // Highlight the selected area
+  clickedElement.classList.add('border-primary');
+  const badge = clickedElement.querySelector('.selection-indicator .badge');
+  if (badge) badge.classList.remove('d-none');
+  
+  // If we have a design selected, show assign button
+  if (selectedDesignUrl) {
+    const assignBtn = document.createElement('button');
+    assignBtn.className = 'btn btn-primary btn-sm mt-2';
+    assignBtn.textContent = 'Assign Current Design';
+    assignBtn.onclick = (e) => {
+      e.stopPropagation(); // Prevent triggering the parent click event
+      assignDesignToPrintArea(areaId, position, clickedElement);
+    };
+    
+    // Remove any existing assign button
+    const existingBtn = clickedElement.querySelector('.assign-design-btn');
+    if (existingBtn) existingBtn.remove();
+    
+    // Add the new button
+    assignBtn.classList.add('assign-design-btn');
+    clickedElement.querySelector('.card-body').appendChild(assignBtn);
+  }
+}
+
+// Assign Design to Print Area
+function assignDesignToPrintArea(areaId, position, element) {
+  if (!selectedDesignUrl) {
+    alert('Please select a design first');
+    return;
+  }
+  
+  console.log(`Assigning design to print area: ${areaId}, position: ${position}`);
+  
+  // Find the element if not provided
+  if (!element) {
+    const areaElements = document.querySelectorAll('.print-area-item');
+    areaElements.forEach(el => {
+      if (el.dataset.areaId === areaId) {
+        element = el;
+      }
+    });
+  }
+  
+  if (!element) return;
+  
+  // Remove any existing design indicator
+  const existingIndicator = element.querySelector('.design-indicator');
+  if (existingIndicator) {
+    existingIndicator.classList.remove('d-none');
+  } else {
+    // Create new design indicator
+    const designIndicator = document.createElement('div');
+    designIndicator.className = 'design-indicator mt-2';
+    designIndicator.innerHTML = `
+      <div class="alert alert-success py-2 mb-2">
+        <p class="mb-1"><strong>Design assigned!</strong></p>
+        <img src="${selectedDesignUrl}" class="img-fluid border rounded" style="max-height: 100px;" alt="Assigned Design">
+      </div>
+    `;
+    
+    element.querySelector('.card-body').appendChild(designIndicator);
+  }
+  
+  // Update the assign button text
+  const assignBtn = element.querySelector('.assign-design-btn');
+  if (assignBtn) {
+    assignBtn.textContent = 'Change Design';
+  }
 }
 
 // Load Variants
@@ -614,8 +681,9 @@ async function loadVariants() {
   }
 }
 
-// Global variable to store placeholders from variants
+// Global variables to store placeholders and selected print area
 let currentPlaceholders = [];
+let selectedPrintAreaId = null;
 
 // Display Variants
 function displayVariants(variantData) {
