@@ -457,7 +457,8 @@ async function handleBlueprintSelection() {
     const data = await response.json();
     
     if (data.success) {
-      populatePrintProviders(data.printProviders);
+      // The backend returns 'providers' not 'printProviders'
+      populatePrintProviders(data.providers);
     } else {
       console.error('Error loading print providers:', data.message);
     }
