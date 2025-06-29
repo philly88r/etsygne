@@ -56,10 +56,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Enable the create product tab now that we have a shop selected
     if (selectedShopId) {
+      // Show the main content
+      const mainContent = document.getElementById('mainContent');
+      if (mainContent) {
+        mainContent.style.display = 'block';
+      }
+      
+      // Enable the create product tab
       const createProductTab = document.getElementById('create-product-tab');
       if (createProductTab) {
         createProductTab.classList.remove('disabled');
       }
+      
+      // Load products for the selected shop
+      loadProducts();
     }
   });
   generateDesignBtn.addEventListener('click', generateDesign);
