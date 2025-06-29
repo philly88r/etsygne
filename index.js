@@ -86,9 +86,25 @@ app.post('/api/verify-token', async (req, res) => {
   }
 });
 
-// Get shop blueprints (product types)
+// Get shop blueprints (product types) - supports both endpoint patterns
 app.get('/api/shops/:shopId/blueprints', async (req, res) => {
   const { shopId } = req.params;
+  const token = req.headers.authorization?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({ error: 'API token is required' });
+  }
+  
+  try {
+    const blueprints = await printifyRequest('/catalog/blueprints.json', 'GET', null, token);
+    res.json({ success: true, blueprints });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get catalog blueprints (product types) - this is the endpoint the frontend is actually using
+app.get('/api/catalog/blueprints', async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   
   if (!token) {
