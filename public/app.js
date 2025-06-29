@@ -618,42 +618,50 @@ async function loadVariants() {
 let currentPlaceholders = [];
 
 // Display Variants
-function displayVariants(variants) {
+function displayVariants(variantData) {
   variantsList.innerHTML = '';
-  console.log('Variants data received:', variants); // Debug log
+  console.log('Variants data received:', variantData); // Debug log
   
-  // Check if variants exists
-  if (!variants) {
+  // Handle different possible data structures flexibly
+  let actualVariants = [];
+  
+  // Case 1: If variantData is directly an array of variants
+  if (Array.isArray(variantData)) {
+    actualVariants = variantData;
+  }
+  // Case 2: If variantData has a variants array property
+  else if (variantData && variantData.variants && Array.isArray(variantData.variants)) {
+    actualVariants = variantData.variants;
+  }
+  // Case 3: If variantData is an object with variant objects as values
+  else if (variantData && typeof variantData === 'object') {
+    // Try to extract variants from the object structure
+    // This handles nested structures that might contain variants
+    const possibleArrays = Object.values(variantData).filter(val => Array.isArray(val));
+    if (possibleArrays.length > 0) {
+      // Use the longest array as it's likely the variants array
+      actualVariants = possibleArrays.reduce((a, b) => a.length > b.length ? a : b, []);
+    }
+  }
+  
+  console.log('Extracted variants array:', actualVariants);
+  
+  // If no variants found, show message
+  if (!actualVariants || actualVariants.length === 0) {
     variantsList.innerHTML = '<p class="text-muted">No variants available for this product and provider</p>';
     return;
   }
   
-  // Convert to array if it's an object and not an array
-  const variantsArray = Array.isArray(variants) ? variants : Object.values(variants);
-  
-  if (variantsArray.length === 0) {
-    variantsList.innerHTML = '<p class="text-muted">No variants available for this product and provider</p>';
-    return;
-  }
-  
-  console.log('First variant structure:', variantsArray[0]); // Debug log
-  console.log('Variant properties:', Object.keys(variantsArray[0])); // Debug log
-  
-  // Extract placeholders from the response
-  // Check different possible locations for placeholders based on Printify API structure
+  // Try to find print areas/placeholders from any available source
   let placeholders = [];
   
-  // Option 1: Placeholders directly in the variant
-  if (variantsArray[0] && variantsArray[0].placeholders) {
-    placeholders = variantsArray[0].placeholders;
-  } 
-  // Option 2: Placeholders in the print_areas property
-  else if (variantsArray[0] && variantsArray[0].print_areas) {
-    placeholders = variantsArray[0].print_areas;
-  }
-  // Option 3: Look for global print_areas in the response
-  else if (variants.print_areas) {
-    placeholders = variants.print_areas;
+  // Check multiple possible locations for print areas/placeholders
+  if (variantData && variantData.print_areas && Array.isArray(variantData.print_areas)) {
+    placeholders = variantData.print_areas;
+  } else if (actualVariants[0] && actualVariants[0].placeholders) {
+    placeholders = actualVariants[0].placeholders;
+  } else if (actualVariants[0] && actualVariants[0].print_areas) {
+    placeholders = actualVariants[0].print_areas;
   }
   
   // If we found placeholders, store them and display print areas
@@ -663,79 +671,94 @@ function displayVariants(variants) {
     displayPrintAreas(currentPlaceholders);
   } else {
     console.log('No placeholders found in the variants response');
-    // Try to fetch print areas separately if needed
     currentPlaceholders = [];
     printAreasList.innerHTML = '<p class="text-muted">No print areas available for this product</p>';
   }
   
   // Process each variant
-  variantsArray.forEach(variant => {
-    // Skip invalid variants
-    if (!variant.id) {
-      console.log('Skipping invalid variant:', variant);
-      return;
-    }
+  actualVariants.forEach(variant => {
+    console.log('Processing variant:', variant);
     
+    // Create variant container
     const variantDiv = document.createElement('div');
     variantDiv.className = 'variant-item d-flex align-items-center mb-2 p-2 border rounded';
     
+    // Create checkbox for variant selection
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.className = 'form-check-input me-2';
-    checkbox.value = variant.id;
-    checkbox.dataset.variantId = variant.id;
+    
+    // Handle variant ID flexibly
+    const variantId = variant.id || variant.variant_id || variant.sku || (typeof variant === 'object' ? JSON.stringify(variant) : variant);
+    checkbox.value = variantId;
+    checkbox.dataset.variantId = variantId;
     checkbox.checked = true;
     
+    // Create label for variant information
     const label = document.createElement('label');
     label.className = 'form-check-label flex-grow-1';
     
-    // Use title directly from the variant if available
-    // According to Printify API docs, variant.title contains the human-readable description
+    // Determine variant title/name in a flexible way
+    let variantTitle = '';
+    
+    // Try different possible properties for the variant title
     if (variant.title) {
-      label.textContent = variant.title;
-    } 
-    // If no title, try to build from options if available
-    else if (variant.options && Array.isArray(variant.options) && variant.options.length > 0) {
-      // Try to get option names from the parent options array if available
-      label.textContent = `Variant ${variant.id} (${variant.options.join(', ')})`;
+      variantTitle = variant.title;
+    } else if (variant.name) {
+      variantTitle = variant.name;
+    } else if (variant.sku) {
+      variantTitle = `SKU: ${variant.sku}`;
+    } else if (variant.options) {
+      // Handle options in different formats
+      if (Array.isArray(variant.options)) {
+        variantTitle = `Options: ${variant.options.join(', ')}`;
+      } else if (typeof variant.options === 'object') {
+        variantTitle = `Options: ${Object.values(variant.options).join(', ')}`;
+      }
     } else {
-      label.textContent = `Variant ${variant.id}`;
+      // Last resort - use ID or stringify the object
+      variantTitle = `Variant ${variantId}`;
     }
     
-    // Add variant details if available
-    if (variant.is_available === false) {
+    // Set the variant title
+    label.textContent = variantTitle;
+    
+    // Add availability badge if that information exists
+    if (variant.is_available === false || variant.in_stock === false) {
       const badge = document.createElement('span');
       badge.className = 'badge bg-danger ms-2';
       badge.textContent = 'Out of Stock';
       label.appendChild(badge);
     }
     
+    // Create price input
     const priceInput = document.createElement('input');
     priceInput.type = 'number';
     priceInput.className = 'form-control form-control-sm variant-price';
     priceInput.min = '0';
     priceInput.step = '0.01';
     
-    // For catalog variants, we won't have pricing info, so set a default price
-    // User can adjust this as needed
+    // Set default price
     let price = '19.99';
     
-    // Note: Catalog variants don't include price/cost, but we'll check anyway
-    // in case we're using product variants in the future
+    // Try to get price from different possible properties
     if (typeof variant.price === 'number') {
-      price = (variant.price / 100).toFixed(2);
+      // Price might be in cents or dollars, try to determine which
+      price = variant.price > 100 ? (variant.price / 100).toFixed(2) : variant.price.toFixed(2);
     } else if (typeof variant.cost === 'number') {
-      price = (variant.cost / 100 * 2).toFixed(2);
+      // Cost might be in cents or dollars, try to determine which
+      const cost = variant.cost > 100 ? variant.cost / 100 : variant.cost;
+      price = (cost * 2).toFixed(2); // 2x markup
     }
     
-    // Add a note explaining the pricing
+    // Add pricing guidance
     const pricingNote = document.createElement('small');
     pricingNote.className = 'text-muted d-block mb-1';
     pricingNote.textContent = 'Set your selling price:';
     label.appendChild(pricingNote);
     
     priceInput.value = price;
-    priceInput.dataset.variantId = variant.id;
+    priceInput.dataset.variantId = variantId;
     
     variantDiv.appendChild(checkbox);
     variantDiv.appendChild(label);
@@ -747,6 +770,8 @@ function displayVariants(variants) {
   // If no variants were displayed, show a message
   if (variantsList.children.length === 0) {
     variantsList.innerHTML = '<div class="alert alert-warning">No valid variants found for this product.</div>';
+  } else {
+    console.log(`Successfully displayed ${variantsList.children.length} variants`);
   }
 }
 
@@ -774,90 +799,146 @@ async function handleProductCreation(event) {
     return;
   }
   
-  // Collect selected variants
+  // Get selected variants - flexible approach to handle any structure
   const selectedVariants = [];
-  
   const variantCheckboxes = document.querySelectorAll('.variant-item input[type="checkbox"]:checked');
+  const variantPrices = document.querySelectorAll('.variant-item .variant-price');
   
   if (variantCheckboxes.length === 0) {
     alert('Please select at least one variant.');
     return;
   }
   
+  console.log(`Found ${variantCheckboxes.length} selected variants`);
+  
   variantCheckboxes.forEach(checkbox => {
     const variantId = checkbox.dataset.variantId;
-    const priceInput = document.querySelector(`.variant-price[data-variant-id="${variantId}"]`);
-    const price = parseFloat(priceInput.value) * 100; // Convert to cents for API
+    let price = 1999; // Default price in cents
+    
+    // Find corresponding price input
+    variantPrices.forEach(priceInput => {
+      if (priceInput.dataset.variantId === variantId) {
+        // Convert from dollars to cents for API
+        price = Math.round(parseFloat(priceInput.value) * 100);
+      }
+    });
+    
+    // Handle variant IDs that might be stored as JSON strings
+    let processedId = variantId;
+    if (variantId.startsWith('{') || variantId.startsWith('[')) {
+      try {
+        // Try to extract id from JSON string
+        const parsedVariant = JSON.parse(variantId);
+        processedId = parsedVariant.id || parsedVariant.variant_id || variantId;
+      } catch (e) {
+        console.log('Could not parse variant ID JSON:', e);
+      }
+    }
     
     selectedVariants.push({
-      id: parseInt(variantId),
+      id: processedId,
       price: price,
       is_enabled: true
     });
   });
   
-  // Get print areas with assigned designs
-  const printAreasWithDesigns = {};
-  const designIndicators = document.querySelectorAll('.design-indicator:not(.d-none)');
+  console.log('Selected variants for product creation:', selectedVariants);
   
-  if (designIndicators.length === 0) {
-    alert('Please assign your design to at least one print area.');
+  // Get print areas with assigned designs - flexible approach
+  const printAreasWithDesigns = {};
+  
+  // First check if we have any designs assigned
+  if (!selectedDesignUrl) {
+    alert('Please generate and select a design first');
     return;
   }
   
-  designIndicators.forEach(indicator => {
-    const areaItem = indicator.closest('.print-area-item');
-    const position = areaItem.dataset.position;
+  // Check if we have a selected print area
+  if (selectedPrintAreaId) {
+    console.log('Selected print area ID:', selectedPrintAreaId);
+    console.log('Current placeholders:', currentPlaceholders);
     
-    if (!position) {
-      console.error('Missing position for print area:', areaItem);
-      return;
+    // Find the corresponding placeholder in currentPlaceholders
+    // Handle different possible structures
+    let selectedArea = null;
+    
+    if (Array.isArray(currentPlaceholders)) {
+      selectedArea = currentPlaceholders.find(area => {
+        const areaId = area.id || area.placeholder_id || area.print_area_id;
+        return areaId === selectedPrintAreaId;
+      });
     }
     
-    // Find the placeholder that matches this position
-    const placeholder = currentPlaceholders.find(p => p.position === position);
-    
-    if (!placeholder) {
-      console.error('Could not find placeholder for position:', position);
-      return;
+    if (selectedArea) {
+      // Get the position - could be in different properties
+      const position = selectedArea.position || selectedArea.placement || 'front';
+      
+      printAreasWithDesigns[position] = {
+        image_url: selectedDesignUrl
+      };
+      
+      console.log(`Assigned design to print area position: ${position}`);
+    } else {
+      // If we can't find the exact area, use a default position
+      console.log('Could not find selected print area, using default position');
+      printAreasWithDesigns['front'] = {
+        image_url: selectedDesignUrl
+      };
     }
-    
-    printAreasWithDesigns[position] = {
-      position: position,
-      imageId: selectedDesignId,
-      // Include placeholder dimensions
-      width: placeholder.width,
-      height: placeholder.height
+  } else {
+    // If no specific area was selected but we have a design, use default position
+    printAreasWithDesigns['front'] = {
+      image_url: selectedDesignUrl
     };
-  });
+    console.log('No print area selected, using default front position');
+  }
   
-  // Prepare product data using the exact field names required by the Printify API
+  // Convert print areas object to array format required by API
+  const printAreasArray = [];
+  for (const position in printAreasWithDesigns) {
+    printAreasArray.push({
+      placement: position,
+      images: [{ 
+        id: 'design-image',
+        url: printAreasWithDesigns[position].image_url
+      }]
+    });
+  }
+  
+  console.log('Print areas for product creation:', printAreasArray);
+  
+  // Prepare the product creation payload - follow Printify API schema exactly
   const productData = {
-    title,
-    description,
-    blueprint_id: blueprintId,
-    print_provider_id: printProviderId,
+    title: title,
+    description: document.getElementById('productDescription').value || 'Custom designed product',
+    blueprint_id: parseInt(blueprintId),
+    print_provider_id: parseInt(printProviderId),
     variants: selectedVariants,
-    print_areas: Object.values(printAreasWithDesigns)
+    print_areas: printAreasArray
   };
   
+  console.log('Creating product with data:', productData);
+  
   try {
-    const response = await fetch(`${API_BASE}/shops/${selectedShopId}/products`, {
+    const response = await fetch(`${API_BASE}/shops/${selectedShopId}/products.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${printifyApiKey}`
       },
-      body: JSON.stringify({ productData })
+      body: JSON.stringify(productData)
     });
     
-    const data = await response.json();
+    const result = await response.json();
     
-    if (data.success) {
-      currentProduct = data.product;
+    if (response.ok) {
+      console.log('Product created successfully:', result);
+      currentProduct = result;
       productCreatedModal.show();
     } else {
-      alert(`Error creating product: ${data.message || 'Unknown error'}`);
+      console.error('Error creating product:', result);
+      alert(`Error creating product: ${result.message || 'Unknown error'}`);
+      console.log('Full error details:', result);
     }
   } catch (error) {
     console.error('Error creating product:', error);
