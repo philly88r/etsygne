@@ -53,8 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
   verifyApiKeyBtn.addEventListener('click', verifyApiKey);
   shopSelect.addEventListener('change', function handleShopSelection(e) {
     selectedShopId = e.target.value;
-    shopIdField.value = selectedShopId;
-  
+    
     // Enable the create product tab now that we have a shop selected
     if (selectedShopId) {
       document.getElementById('create-product-tab').classList.remove('disabled');
@@ -62,10 +61,25 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   generateDesignBtn.addEventListener('click', generateDesign);
   refreshProductsBtn.addEventListener('click', loadProducts);
-  blueprintSelect.addEventListener('change', handleBlueprintSelection);
-  providerSelect.addEventListener('change', handleProviderSelection);
-  createProductBtn.addEventListener('click', createProduct);
-  publishProductBtn.addEventListener('click', publishProduct);
+  blueprintSelect.addEventListener('change', function(e) {
+    const blueprintId = e.target.value;
+    console.log('Blueprint selected:', blueprintId);
+  });
+  
+  providerSelect.addEventListener('change', function(e) {
+    const providerId = e.target.value;
+    console.log('Provider selected:', providerId);
+  });
+  
+  createProductBtn.addEventListener('click', function() {
+    console.log('Create product clicked');
+    // Implementation will be added later
+  });
+  
+  publishProductBtn.addEventListener('click', function() {
+    console.log('Publish product clicked');
+    // Implementation will be added later
+  });
   useThisDesignBtn.addEventListener('click', useSelectedDesign);
   
   // Add the 'disabled' class to tabs that require a shop to be selected
