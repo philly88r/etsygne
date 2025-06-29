@@ -605,6 +605,9 @@ function assignDesignToPrintArea(areaId, position, element) {
   
   console.log(`Assigning design to print area: ${areaId}, position: ${position}`);
   
+  // Store the selected print area position for product creation
+  selectedPrintAreaPosition = position || 'front';
+  
   // Find the element if not provided
   if (!element) {
     const areaElements = document.querySelectorAll('.print-area-item');
@@ -617,6 +620,11 @@ function assignDesignToPrintArea(areaId, position, element) {
   
   if (!element) return;
   
+  // Clear design indicators from all other areas
+  document.querySelectorAll('.print-area-item .design-indicator').forEach(indicator => {
+    indicator.classList.add('d-none');
+  });
+  
   // Remove any existing design indicator
   const existingIndicator = element.querySelector('.design-indicator');
   if (existingIndicator) {
@@ -627,11 +635,12 @@ function assignDesignToPrintArea(areaId, position, element) {
     designIndicator.className = 'design-indicator mt-2';
     designIndicator.innerHTML = `
       <div class="alert alert-success py-2 mb-2">
-        <p class="mb-1"><strong>Design assigned!</strong></p>
+        <p class="mb-1"><strong>Design assigned to ${position || 'front'}!</strong></p>
         <img src="${selectedDesignUrl}" class="img-fluid border rounded" style="max-height: 100px;" alt="Assigned Design">
       </div>
     `;
     
+    // Add the design indicator at the end of the card body
     element.querySelector('.card-body').appendChild(designIndicator);
   }
   
@@ -640,6 +649,21 @@ function assignDesignToPrintArea(areaId, position, element) {
   if (assignBtn) {
     assignBtn.textContent = 'Change Design';
   }
+  
+  // Show a message that the design is ready to be used
+  const designReadyMsg = document.createElement('div');
+  designReadyMsg.className = 'alert alert-info mt-3';
+  designReadyMsg.innerHTML = `<strong>Design ready!</strong> Your design has been assigned to the ${position || 'front'} print area.`;
+  
+  // Remove any existing message
+  const existingMsg = document.getElementById('designReadyMessage');
+  if (existingMsg) existingMsg.remove();
+  
+  // Add ID for easy reference
+  designReadyMsg.id = 'designReadyMessage';
+  
+  // Add to the page
+  document.getElementById('printAreasList').after(designReadyMsg);
 }
 
 // Load Variants
@@ -684,6 +708,7 @@ async function loadVariants() {
 // Global variables to store placeholders and selected print area
 let currentPlaceholders = [];
 let selectedPrintAreaId = null;
+let selectedPrintAreaPosition = null;
 
 // Display Variants
 function displayVariants(variantData) {
@@ -924,34 +949,44 @@ async function handleProductCreation(event) {
   // Check if we have a selected print area
   if (selectedPrintAreaId) {
     console.log('Selected print area ID:', selectedPrintAreaId);
+    console.log('Selected print area position:', selectedPrintAreaPosition);
     console.log('Current placeholders:', currentPlaceholders);
     
-    // Find the corresponding placeholder in currentPlaceholders
-    // Handle different possible structures
-    let selectedArea = null;
-    
-    if (Array.isArray(currentPlaceholders)) {
-      selectedArea = currentPlaceholders.find(area => {
-        const areaId = area.id || area.placeholder_id || area.print_area_id;
-        return areaId === selectedPrintAreaId;
-      });
-    }
-    
-    if (selectedArea) {
-      // Get the position - could be in different properties
-      const position = selectedArea.position || selectedArea.placement || 'front';
-      
-      printAreasWithDesigns[position] = {
+    // Use the stored position if available
+    if (selectedPrintAreaPosition) {
+      printAreasWithDesigns[selectedPrintAreaPosition] = {
         image_url: selectedDesignUrl
       };
       
-      console.log(`Assigned design to print area position: ${position}`);
+      console.log(`Using stored position: ${selectedPrintAreaPosition}`);
     } else {
-      // If we can't find the exact area, use a default position
-      console.log('Could not find selected print area, using default position');
-      printAreasWithDesigns['front'] = {
-        image_url: selectedDesignUrl
-      };
+      // Find the corresponding placeholder in currentPlaceholders
+      // Handle different possible structures
+      let selectedArea = null;
+      
+      if (Array.isArray(currentPlaceholders)) {
+        selectedArea = currentPlaceholders.find(area => {
+          const areaId = area.id || area.placeholder_id || area.print_area_id;
+          return areaId === selectedPrintAreaId;
+        });
+      }
+      
+      if (selectedArea) {
+        // Get the position - could be in different properties
+        const position = selectedArea.position || selectedArea.placement || 'front';
+        
+        printAreasWithDesigns[position] = {
+          image_url: selectedDesignUrl
+        };
+        
+        console.log(`Assigned design to print area position: ${position}`);
+      } else {
+        // If we can't find the exact area, use a default position
+        console.log('Could not find selected print area, using default position');
+        printAreasWithDesigns['front'] = {
+          image_url: selectedDesignUrl
+        };
+      }
     }
   } else {
     // If no specific area was selected but we have a design, use default position

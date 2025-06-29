@@ -283,34 +283,21 @@ app.post('/api/generate-image', async (req, res) => {
   }
   
   // Set up the API call to Google Imagen using the correct format for Imagen 4
+  // Use API key as query parameter instead
   const options = {
     hostname: 'generativelanguage.googleapis.com',
-    path: '/v1beta/models/imagen-4.0-generate-preview-06-06:generateContent',
+    path: `/v1beta/models/imagen-4.0-generate-preview-06-06:generateContent?key=${GOOGLE_API_KEY}`,
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GOOGLE_API_KEY}`
+      'Content-Type': 'application/json'
+      // Remove Authorization header
     }
   };
   
+  // Use correct request format for Imagen
   const postData = JSON.stringify({
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          {
-            text: `Generate a high-quality, professional product design based on this description: ${prompt}. The image should be suitable for printing on products like t-shirts, mugs, and posters.`
-          }
-        ]
-      }
-    ],
-    generation_config: {
-      temperature: 0.7,
-      topP: 1.0,
-      topK: 32,
-      maxOutputTokens: 2048,
-      responseMimeType: 'image/png'
-    }
+    prompt: prompt,
+    number_of_images: numImages || 1
   });
   
   try {
