@@ -586,16 +586,22 @@ async function loadVariants() {
   variantsList.innerHTML = '<p class="text-muted">Loading variants...</p>';
   
   try {
-    const response = await fetch(`${API_BASE}/catalog/blueprints/${blueprintId}/print_providers/${providerId}/variants`, {
+    // Log the request URL for debugging
+    const requestUrl = `${API_BASE}/catalog/blueprints/${blueprintId}/print_providers/${providerId}/variants`;
+    console.log('Requesting variants from:', requestUrl);
+    
+    const response = await fetch(requestUrl, {
       headers: {
         'Authorization': `Bearer ${printifyApiKey}`
       }
     });
     
     const data = await response.json();
+    console.log('Variants API response:', data);
     
     if (data.success) {
-      displayVariants(data.variants);
+      // Make sure we're accessing the variants array correctly
+      displayVariants(data.variants || []);
     } else {
       console.error('Error loading variants:', data.message);
       variantsList.innerHTML = `<div class="alert alert-danger">Error: ${data.message}</div>`;
@@ -633,11 +639,31 @@ function displayVariants(variants) {
   console.log('First variant structure:', variantsArray[0]); // Debug log
   console.log('Variant properties:', Object.keys(variantsArray[0])); // Debug log
   
-  // Check if the first variant has placeholders
+  // Extract placeholders from the response
+  // Check different possible locations for placeholders based on Printify API structure
+  let placeholders = [];
+  
+  // Option 1: Placeholders directly in the variant
   if (variantsArray[0] && variantsArray[0].placeholders) {
-    currentPlaceholders = variantsArray[0].placeholders;
+    placeholders = variantsArray[0].placeholders;
+  } 
+  // Option 2: Placeholders in the print_areas property
+  else if (variantsArray[0] && variantsArray[0].print_areas) {
+    placeholders = variantsArray[0].print_areas;
+  }
+  // Option 3: Look for global print_areas in the response
+  else if (variants.print_areas) {
+    placeholders = variants.print_areas;
+  }
+  
+  // If we found placeholders, store them and display print areas
+  if (placeholders && placeholders.length > 0) {
+    console.log('Found placeholders:', placeholders);
+    currentPlaceholders = placeholders;
     displayPrintAreas(currentPlaceholders);
   } else {
+    console.log('No placeholders found in the variants response');
+    // Try to fetch print areas separately if needed
     currentPlaceholders = [];
     printAreasList.innerHTML = '<p class="text-muted">No print areas available for this product</p>';
   }
@@ -651,7 +677,7 @@ function displayVariants(variants) {
     }
     
     const variantDiv = document.createElement('div');
-    variantDiv.className = 'variant-item d-flex align-items-center';
+    variantDiv.className = 'variant-item d-flex align-items-center mb-2 p-2 border rounded';
     
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -662,7 +688,27 @@ function displayVariants(variants) {
     
     const label = document.createElement('label');
     label.className = 'form-check-label flex-grow-1';
-    label.textContent = variant.title || `Variant ${variant.id}`;
+    
+    // Use title directly from the variant if available
+    // According to Printify API docs, variant.title contains the human-readable description
+    if (variant.title) {
+      label.textContent = variant.title;
+    } 
+    // If no title, try to build from options if available
+    else if (variant.options && Array.isArray(variant.options) && variant.options.length > 0) {
+      // Try to get option names from the parent options array if available
+      label.textContent = `Variant ${variant.id} (${variant.options.join(', ')})`;
+    } else {
+      label.textContent = `Variant ${variant.id}`;
+    }
+    
+    // Add variant details if available
+    if (variant.is_available === false) {
+      const badge = document.createElement('span');
+      badge.className = 'badge bg-danger ms-2';
+      badge.textContent = 'Out of Stock';
+      label.appendChild(badge);
+    }
     
     const priceInput = document.createElement('input');
     priceInput.type = 'number';
@@ -670,19 +716,23 @@ function displayVariants(variants) {
     priceInput.min = '0';
     priceInput.step = '0.01';
     
-    let price;
+    // For catalog variants, we won't have pricing info, so set a default price
+    // User can adjust this as needed
+    let price = '19.99';
     
+    // Note: Catalog variants don't include price/cost, but we'll check anyway
+    // in case we're using product variants in the future
     if (typeof variant.price === 'number') {
-      // According to API docs, price is in cents
-      // Convert from cents to dollars (e.g. 1000 = $10.00)
       price = (variant.price / 100).toFixed(2);
     } else if (typeof variant.cost === 'number') {
-      // If no price but has cost, use 2x markup
-      price = (variant.cost * 2).toFixed(2);
-    } else {
-      // Default fallback price
-      price = '19.99';
+      price = (variant.cost / 100 * 2).toFixed(2);
     }
+    
+    // Add a note explaining the pricing
+    const pricingNote = document.createElement('small');
+    pricingNote.className = 'text-muted d-block mb-1';
+    pricingNote.textContent = 'Set your selling price:';
+    label.appendChild(pricingNote);
     
     priceInput.value = price;
     priceInput.dataset.variantId = variant.id;
