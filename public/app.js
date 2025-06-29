@@ -385,33 +385,49 @@ function displayProducts(products) {
 }
 
 // Load Blueprints (Product Types)
-async function loadBlueprints() {
-  if (!printifyApiKey) return;
-  
-  document.getElementById('blueprintLoading').style.display = 'block';
-  blueprintSelect.disabled = true;
+document.getElementById('create-product-tab').addEventListener('click', async () => {
+  if (!selectedShopId) {
+    alert('Please select a shop first');
+    return;
+  }
   
   try {
-    const response = await fetch(`${API_BASE}/catalog/blueprints`, {
+    console.log('Loading blueprints from:', `${API_BASE}/shops/${selectedShopId}/blueprints`);
+    const response = await fetch(`${API_BASE}/shops/${selectedShopId}/blueprints`, {
       headers: {
         'Authorization': `Bearer ${printifyApiKey}`
       }
     });
     
+    console.log('Blueprint response status:', response.status);
     const data = await response.json();
+    console.log('Blueprint data:', data);
     
-    if (data.success) {
-      populateBlueprints(data.blueprints);
+    if (data.success || data.blueprints) {
+      const blueprintSelect = document.getElementById('blueprint-select');
+      blueprintSelect.innerHTML = '<option value="">Select a product type</option>';
+      
+      const blueprints = data.blueprints || (data.success && data.data) || [];
+      console.log('Processed blueprints:', blueprints);
+      
+      blueprints.forEach(blueprint => {
+        const option = document.createElement('option');
+        option.value = blueprint.id;
+        option.textContent = blueprint.title;
+        blueprintSelect.appendChild(option);
+      });
+      
+      blueprintData = blueprints.reduce((acc, blueprint) => {
+        acc[blueprint.id] = blueprint;
+        return acc;
+      }, {});
     } else {
-      console.error('Error loading blueprints:', data.message);
+      console.error('Error loading blueprints:', data.message || data.error || 'Unknown error');
     }
   } catch (error) {
     console.error('Error loading blueprints:', error);
-  } finally {
-    document.getElementById('blueprintLoading').style.display = 'none';
-    blueprintSelect.disabled = false;
   }
-}
+});
 
 // Populate Blueprints Dropdown
 function populateBlueprints(blueprints) {
@@ -467,6 +483,45 @@ async function handleBlueprintSelection() {
     document.getElementById('providerLoading').style.display = 'none';
   }
 }
+
+// Load Print Providers when a blueprint is selected
+document.getElementById('blueprint-select').addEventListener('change', async (e) => {
+  const blueprintId = e.target.value;
+  
+  if (!blueprintId) return;
+  
+  try {
+    console.log('Loading print providers from:', `${API_BASE}/catalog/blueprints/${blueprintId}/print_providers`);
+    const response = await fetch(`${API_BASE}/catalog/blueprints/${blueprintId}/print_providers`, {
+      headers: {
+        'Authorization': `Bearer ${printifyApiKey}`
+      }
+    });
+    
+    console.log('Print provider response status:', response.status);
+    const data = await response.json();
+    console.log('Print provider data:', data);
+    
+    if (data.success || data.providers) {
+      const providerSelect = document.getElementById('provider-select');
+      providerSelect.innerHTML = '<option value="">Select a print provider</option>';
+      
+      const providers = data.providers || (data.success && data.data) || [];
+      console.log('Processed providers:', providers);
+      
+      providers.forEach(provider => {
+        const option = document.createElement('option');
+        option.value = provider.id;
+        option.textContent = provider.title;
+        providerSelect.appendChild(option);
+      });
+    } else {
+      console.error('Error loading print providers:', data.message || data.error || 'Unknown error');
+    }
+  } catch (error) {
+    console.error('Error loading print providers:', error);
+  }
+});
 
 // Populate Print Providers Dropdown
 function populatePrintProviders(providers) {
