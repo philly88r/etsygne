@@ -1,74 +1,72 @@
 // Global variables
-let printifyApiKey = '';
+let printifyApiKey = null;
 let selectedShopId = '';
-let selectedDesignUrl = '';
-let selectedDesignId = '';
+let selectedDesignUrl = null;
+let selectedDesignOriginalUrl = null; // Store the original Fal.ai URL
+let selectedDesignId = null;
 let currentProduct = null;
 let blueprintData = {};
 let printAreas = {};
+let currentDesignPrompt = ''; // Store the current design prompt globally
+let currentPlaceholders = []; // Store the current print area placeholders
+let selectedPrintAreaWidth = 1000; // Default width for print areas
+let selectedPrintAreaHeight = 1000; // Default height for print areas
+let selectedPrintAreaPosition = 'front'; // Default position
+let generatedDesigns = []; // Store the generated designs
+let selectedPrintAreaId = null; // Store the selected print area ID
+let printifyImageWidth = 1000; // Default width for uploaded images
+let printifyImageHeight = 1000; // Default height for uploaded images
+let printifyImageSrc = ''; // Store the image source URL
 
-// API base URL - dynamically set based on environment
+// API base URL - using new server on port 3003
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-  ? `http://${window.location.hostname}:${window.location.port}/api` 
+  ? `http://${window.location.hostname}:3003/api` 
   : '/api';
 
-// DOM Elements
-const apiKeyInput = document.getElementById('printifyApiKey');
-const verifyApiKeyBtn = document.getElementById('verifyApiKey');
-const apiKeyStatus = document.getElementById('apiKeyStatus');
-const shopSelectionSection = document.getElementById('shopSelectionSection');
-const shopSelect = document.getElementById('shopSelect');
-const mainContent = document.getElementById('mainContent');
-const generateDesignBtn = document.getElementById('generateDesignBtn');
-const designPrompt = document.getElementById('designPrompt');
-const generationStatus = document.getElementById('generationStatus');
-const generatedDesigns = document.getElementById('generatedDesigns');
-const refreshProductsBtn = document.getElementById('refreshProductsBtn');
-const productsList = document.getElementById('productsList');
-const productsLoading = document.getElementById('productsLoading');
-const blueprintSelect = document.getElementById('blueprintSelect');
-const providerSelect = document.getElementById('providerSelect');
-const variantsList = document.getElementById('variantsList');
-const printAreasList = document.getElementById('printAreasList');
-const createProductForm = document.getElementById('createProductForm');
-const selectedDesignContainer = document.getElementById('selectedDesignContainer');
-const previewImage = document.getElementById('previewImage');
-const useThisDesignBtn = document.getElementById('useThisDesignBtn');
-const publishProductBtn = document.getElementById('publishProductBtn');
+// DOM Elements - using let instead of const to allow reassignment in DOMContentLoaded
+let apiKeyInput;
+let verifyApiKeyBtn;
+let apiKeyStatus;
+let shopSelectionSection;
+let shopSelect;
+let mainContent;
+
+let refreshProductsBtn;
+let productsList;
+let productsLoading;
+let blueprintSelect;
+let providerSelect;
+let variantsList;
+let printAreasList;
+let createProductForm;
+let selectedDesignContainer;
+let previewImage;
+let useThisDesignBtn;
+let publishProductBtn;
+let productTitle;
+let productDescription;
+let selectedDesignPreview;
+let createProductBtn;
 
 // Bootstrap Modal instances
-const designPreviewModal = new bootstrap.Modal(document.getElementById('designPreviewModal'));
-const productCreatedModal = new bootstrap.Modal(document.getElementById('productCreatedModal'));
+let designPreviewModal;
+let productCreatedModal;
 
-// Event Listeners
-document.addEventListener('DOMContentLoaded', () => {
-  // Check for stored API key
-  const storedApiKey = localStorage.getItem('printifyApiKey');
-  if (storedApiKey) {
-    apiKeyInput.value = storedApiKey;
-    verifyApiKey();
+// Function to prompt for Printify API key
+function promptForApiKey() {
+  if (!printifyApiKey) {
+    const key = prompt('Please enter your Printify API key to continue:');
+    if (key && key.trim()) {
+      printifyApiKey = key.trim();
+      localStorage.setItem('printifyApiKey', printifyApiKey); // Save for convenience
+      return true;
+    } else {
+      alert('A valid Printify API key is required to use this application.');
+      return false;
+    }
   }
-  
-  // Setup event listeners
-  verifyApiKeyBtn.addEventListener('click', verifyApiKey);
-  shopSelect.addEventListener('change', handleShopSelection);
-  generateDesignBtn.addEventListener('click', generateDesign);
-  refreshProductsBtn.addEventListener('click', loadProducts);
-  blueprintSelect.addEventListener('change', handleBlueprintSelection);
-  providerSelect.addEventListener('change', loadVariants);
-  createProductForm.addEventListener('submit', handleProductCreation);
-  useThisDesignBtn.addEventListener('click', useSelectedDesign);
-  publishProductBtn.addEventListener('click', publishProduct);
-  
-  // Tab change listeners
-  document.getElementById('products-tab').addEventListener('click', () => {
-    if (selectedShopId) loadProducts();
-  });
-  
-  document.getElementById('create-tab').addEventListener('click', () => {
-    if (selectedShopId && !blueprintSelect.options.length) loadBlueprints();
-  });
-});
+  return true;
+}
 
 // API Key Verification
 async function verifyApiKey() {
@@ -96,13 +94,14 @@ async function verifyApiKey() {
       localStorage.setItem('printifyApiKey', apiKey);
       showApiKeyStatus('API key verified successfully!', 'success');
       
-      // Populate shops dropdown
-      populateShops(data.shops);
+      // Get shops using the new getShops function
+      getShops();
       
       // Show shop selection section
       shopSelectionSection.style.display = 'block';
     } else {
-      showApiKeyStatus('Invalid API key. Please check and try again.', 'danger');
+      const errorMessage = data.details ? `Invalid API key: ${data.details}` : 'Invalid API key. Please check and try again.';
+      showApiKeyStatus(errorMessage, 'danger');
     }
   } catch (error) {
     console.error('Error verifying API key:', error);
@@ -115,16 +114,156 @@ function showApiKeyStatus(message, type) {
   apiKeyStatus.innerHTML = `<div class="alert alert-${type} mb-0 py-2">${message}</div>`;
 }
 
-// Populate Shops Dropdown
-function populateShops(shops) {
-  shopSelect.innerHTML = '<option selected disabled>Choose a shop...</option>';
+// Initialize UI function declaration
+function initializeUI() {
+  // Check if we have a stored API key
+  const storedApiKey = localStorage.getItem('printifyApiKey');
+  if (storedApiKey) {
+    apiKeyInput.value = storedApiKey;
+    printifyApiKey = storedApiKey;
+    verifyApiKey();
+  }
   
-  shops.forEach(shop => {
-    const option = document.createElement('option');
-    option.value = shop.id;
-    option.textContent = shop.title;
-    shopSelect.appendChild(option);
+  // Initialize the Create Product button state
+  updateCreateProductButton();
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', () => {
+  // Get DOM elements
+  apiKeyInput = document.getElementById('printifyApiKey');
+  verifyApiKeyBtn = document.getElementById('verifyApiKey');
+  apiKeyStatus = document.getElementById('apiKeyStatus');
+  shopSelectionSection = document.getElementById('shopSelectionSection');
+  shopSelect = document.getElementById('shopSelect');
+  mainContent = document.getElementById('mainContent');
+  selectedDesignPreview = document.getElementById('selectedDesignPreview');
+  refreshProductsBtn = document.getElementById('refreshProductsBtn');
+  productsList = document.getElementById('productsList');
+  productsLoading = document.getElementById('productsLoading');
+  blueprintSelect = document.getElementById('blueprintSelect');
+  providerSelect = document.getElementById('providerSelect');
+  variantsList = document.getElementById('variantsList');
+  printAreasList = document.getElementById('printAreasList');
+  createProductForm = document.getElementById('createProductForm');
+  selectedDesignContainer = document.getElementById('selectedDesignContainer');
+  previewImage = document.getElementById('previewImage');
+  useThisDesignBtn = document.getElementById('useThisDesignBtn');
+  publishProductBtn = document.getElementById('publishProductBtn');
+  productTitle = document.getElementById('productTitle');
+  productDescription = document.getElementById('productDescription');
+  createProductBtn = document.getElementById('createProductBtn');
+  
+  // Initialize Bootstrap modals
+  const designPreviewModalEl = document.getElementById('designPreviewModal');
+  const productCreatedModalEl = document.getElementById('productCreatedModal');
+  if (designPreviewModalEl) designPreviewModal = new bootstrap.Modal(designPreviewModalEl);
+  if (productCreatedModalEl) productCreatedModal = new bootstrap.Modal(productCreatedModalEl);
+  
+  // Setup event listeners
+  if (verifyApiKeyBtn) {
+    verifyApiKeyBtn.addEventListener('click', verifyApiKey);
+  }
+  if (apiKeyInput) {
+    apiKeyInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        verifyApiKey();
+      }
+    });
+  }
+  if (shopSelect) {
+    shopSelect.addEventListener('change', handleShopSelection);
+  }
+  if (refreshProductsBtn) {
+    refreshProductsBtn.addEventListener('click', loadProducts);
+  }
+  if (blueprintSelect) {
+    blueprintSelect.addEventListener('change', handleBlueprintSelection);
+  }
+  if (providerSelect) {
+    providerSelect.addEventListener('change', loadVariants);
+  }
+  if (createProductForm) {
+    createProductForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleProductCreation();
+    });
+  }
+  if (useThisDesignBtn) {
+    useThisDesignBtn.addEventListener('click', useSelectedDesign);
+  }
+  if (publishProductBtn) {
+    publishProductBtn.addEventListener('click', publishProduct);
+  }
+
+  // Tab change listeners
+  document.getElementById('products-tab').addEventListener('click', () => {
+    if (selectedShopId) loadProducts();
   });
+  document.getElementById('create-tab').addEventListener('click', () => {
+    if (selectedShopId && !blueprintSelect.options.length) loadBlueprints();
+  });
+  
+  // Initialize UI
+  initializeUI();
+});
+
+// Get shops from Printify API
+async function getShops() {
+  if (!printifyApiKey) {
+    if (!promptForApiKey()) {
+      return;
+    }
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE}/shops`, {
+      headers: {
+        'Authorization': `Bearer ${printifyApiKey}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Shops response:', data);
+    
+    // Check if the response has a shops property (from our API endpoint)
+    const shops = data.shops || data;
+    
+    if (!shops || !Array.isArray(shops) || shops.length === 0) {
+      alert('No shops found. Please check your Printify API key.');
+      return;
+    }
+    
+    shopSelect.innerHTML = '<option selected disabled value="">Select a shop...</option>';
+    
+    shops.forEach(shop => {
+      const option = document.createElement('option');
+      option.value = shop.id;
+      option.textContent = shop.title;
+      shopSelect.appendChild(option);
+    });
+    
+    // Show the shop selection
+    if (shopSelectionSection) {
+      shopSelectionSection.style.display = 'block';
+    } else {
+      console.error('shopSelectionSection element not found');
+      // Try to find it by ID as a fallback
+      const section = document.getElementById('shopSelectionSection');
+      if (section) {
+        section.style.display = 'block';
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching shops:', error);
+    alert('Error fetching shops: ' + error.message);
+  }
 }
 
 // Handle Shop Selection
@@ -135,17 +274,6 @@ function handleShopSelection() {
     loadProducts();
     loadBlueprints();
   }
-}
-
-// Generate Design with Google Imagen 4 - Original function kept for compatibility
-async function generateDesign() {
-  const prompt = document.getElementById('designPrompt').value.trim();
-  if (!prompt) {
-    document.getElementById('generationStatus').innerHTML = '<div class="alert alert-danger">Please enter a design description</div>';
-    return;
-  }
-  
-  await generateDesignWithDetails(prompt);
 }
 
 // Generate Design specifically for the selected print area
@@ -164,43 +292,80 @@ async function generateDesignForPrintArea() {
   
   // Include print area information in the prompt
   const enhancedPrompt = `${prompt} - Design for ${selectedPrintAreaPosition} placement, optimized for ${selectedPrintAreaWidth}x${selectedPrintAreaHeight} dimensions.`;
+  console.log('Enhanced prompt with print area info:', enhancedPrompt);
   
   await generateDesignWithDetails(enhancedPrompt, selectedPrintAreaWidth, selectedPrintAreaHeight);
 }
 
 // Shared design generation function with size parameters
 async function generateDesignWithDetails(prompt, width = selectedPrintAreaWidth, height = selectedPrintAreaHeight) {
-  const statusElement = document.getElementById('generationStatus');
-  const btnElement = document.getElementById('generateDesignBtn');
+  console.log('generateDesignWithDetails called with:', { prompt, width, height });
   
-  if (!statusElement || !btnElement) {
-    console.error('Required elements not found');
+  // Find the status element - could be either the main one or the one in the print area
+  const statusElement = document.getElementById('generationStatus');
+  console.log('Found status element:', statusElement);
+  
+  // Find the button that triggered this - could be either the main one or the print area one
+  const mainBtnElement = document.getElementById('generateDesignBtn');
+  const printAreaBtnElement = document.getElementById('printAreaDesignBtn');
+  console.log('Found buttons:', { mainBtnElement, printAreaBtnElement });
+  
+  // Use whichever button is available
+  const btnElement = printAreaBtnElement || mainBtnElement;
+  
+  if (!statusElement) {
+    console.error('Status element not found');
     return;
   }
   
+  console.log('Starting design generation with prompt:', prompt);
   statusElement.innerHTML = '<div class="d-flex align-items-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div> Generating designs...</div>';
-  btnElement.disabled = true;
+  
+  // Disable the button if it exists
+  if (btnElement) {
+    console.log('Disabling button:', btnElement);
+    btnElement.disabled = true;
+  }
   
   try {
     console.log(`Generating design with prompt: ${prompt}, size: ${width}x${height}`);
+    
+    // Log the API endpoint we're calling
+    console.log('Calling API endpoint:', `${API_BASE}/generate-image`);
+    
+    const requestBody = { 
+      prompt, 
+      width, 
+      height,
+      numImages: 1 
+    };
+    console.log('Request body:', requestBody);
     
     const response = await fetch(`${API_BASE}/generate-image`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ 
-        prompt, 
-        width, 
-        height,
-        numImages: 1 
-      })
+      body: JSON.stringify(requestBody)
     });
     
+    console.log('API response status:', response.status);
     const data = await response.json();
+    console.log('API response data:', data);
     
     if (data.success || data.images) {
       statusElement.innerHTML = '<div class="alert alert-success">Designs generated successfully!</div>';
+      
+      // Make sure the designs container exists
+      let designsContainer = document.getElementById('generatedDesigns');
+      if (!designsContainer) {
+        console.log('Creating generatedDesigns container');
+        designsContainer = document.createElement('div');
+        designsContainer.id = 'generatedDesigns';
+        designsContainer.className = 'row mt-3';
+        statusElement.parentNode.insertBefore(designsContainer, statusElement.nextSibling);
+      }
+      
       displayGeneratedDesigns(data.images || []);
     } else {
       statusElement.innerHTML = `<div class="alert alert-danger">Error: ${data.message || data.error || 'Unknown error'}</div>`;
@@ -209,16 +374,246 @@ async function generateDesignWithDetails(prompt, width = selectedPrintAreaWidth,
     console.error('Error generating designs:', error);
     statusElement.innerHTML = '<div class="alert alert-danger">Error generating designs. Please try again.</div>';
   } finally {
-    btnElement.disabled = false;
+    // Re-enable the button if it exists
+    if (btnElement) {
+      btnElement.disabled = false;
+    }
   }
+}
+
+// Function to store generated designs from API response
+function storeGeneratedDesigns(images) {
+  console.log('Storing generated designs:', images);
+  if (!Array.isArray(images)) {
+    console.error('Images is not an array:', images);
+    return;
+  }
+  
+  // Initialize generatedDesigns if needed
+  if (!Array.isArray(generatedDesigns)) {
+    generatedDesigns = [];
+  }
+  
+  // Add the new images to the generatedDesigns array
+  images.forEach(image => {
+    generatedDesigns.push({
+      name: image.name,
+      url: image.url,
+      originalUrl: image.originalUrl,
+      data: image.data
+    });
+  });
+  
+  console.log('Updated generatedDesigns array:', generatedDesigns);
+}
+
+// Update the Create Product button to show if design is selected
+function updateCreateProductButton() {
+  const createProductBtn = document.getElementById('createProductBtn');
+  if (createProductBtn) {
+    if (selectedDesignId && selectedDesignUrl) {
+      createProductBtn.textContent = 'Create Product';
+      createProductBtn.disabled = false;
+      createProductBtn.classList.remove('btn-secondary');
+      createProductBtn.classList.add('btn-primary');
+    } else {
+      createProductBtn.textContent = 'Select design first';
+      createProductBtn.disabled = true;
+      createProductBtn.classList.remove('btn-primary');
+      createProductBtn.classList.add('btn-secondary');
+    }
+  }
+}
+
+// Function to select a design and use it for the current print area
+function selectDesign(designId, designUrl, originalUrl) {
+  console.log(`Selecting design: ${designId}`);
+  selectedDesignId = designId; // Store the selected design ID
+  
+  // Safety check - ensure generatedDesigns is an array
+  if (!Array.isArray(generatedDesigns)) {
+    console.log('Warning: generatedDesigns is not an array, initializing it');
+    generatedDesigns = [];
+  }
+  
+  // Find the design in generatedDesigns to get both local and original URLs
+  let designObj = null;
+  try {
+    designObj = generatedDesigns.find(design => design && design.name === designId);
+  } catch (error) {
+    console.error('Error finding design:', error);
+  }
+  
+  // Store both URLs - local URL for display, original URL for Printify API
+  selectedDesignUrl = designUrl || `/generated-images/${designId}`;
+  selectedDesignOriginalUrl = designObj && designObj.originalUrl ? designObj.originalUrl : selectedDesignUrl;
+  
+  // Immediately upload the selected design to Printify
+  uploadDesignToPrintify();
+  
+  console.log(`Design selected: ${designId}, URL: ${selectedDesignUrl.substring(0, 30)}...`);
+  console.log(`Original URL for Printify: ${selectedDesignOriginalUrl.substring(0, 30)}...`);
+  
+  // Remove checkmarks from all designs
+  const allCheckmarks = document.querySelectorAll('.design-checkmark');
+  allCheckmarks.forEach(checkmark => checkmark.remove());
+  
+  // Remove highlight from all design containers
+  const allDesignContainers = document.querySelectorAll('#generatedDesigns .col-md-4');
+  allDesignContainers.forEach(container => {
+    container.style.border = '';
+  });
+  
+  // Find the selected design container - try multiple methods for reliability
+  let selectedContainer = null;
+  
+  // Method 1: Try to find by data attribute first (most reliable)
+  selectedContainer = document.querySelector(`#generatedDesigns [data-design-id="${designId}"]`);
+  console.log('Method 1 result:', selectedContainer ? 'Found container' : 'Not found');
+  
+  // Method 2: Try to find by image with data attribute
+  if (!selectedContainer) {
+    const img = document.querySelector(`#generatedDesigns img[data-design-id="${designId}"]`);
+    if (img) {
+      // Walk up to find the column container
+      selectedContainer = img.closest('.col-md-4');
+      console.log('Method 2 result:', selectedContainer ? 'Found container' : 'Not found');
+    }
+  }
+  
+  // Method 3: Try to find by image src or alt
+  if (!selectedContainer) {
+    selectedContainer = Array.from(allDesignContainers).find(container => {
+      const img = container.querySelector('img');
+      return img && (img.src.includes(designId) || img.alt.includes(designId));
+    });
+    console.log('Method 3 result:', selectedContainer ? 'Found container' : 'Not found');
+  }
+  
+  // Method 4: Try to find by button with data-design-id
+  if (!selectedContainer) {
+    const button = document.querySelector(`#generatedDesigns button[data-design-id="${designId}"]`);
+    if (button) {
+      selectedContainer = button.closest('.col-md-4');
+      console.log('Method 4 result:', selectedContainer ? 'Found container' : 'Not found');
+    }
+  }
+  
+  if (selectedContainer) {
+    console.log('Found selected container:', selectedContainer);
+    
+    // Add visual indicator (checkmark)
+    const checkmark = document.createElement('div');
+    checkmark.className = 'design-checkmark';
+    
+    // Create a simple checkmark without using Bootstrap icons
+    const checkmarkInner = document.createElement('div');
+    checkmarkInner.style.width = '30px';
+    checkmarkInner.style.height = '30px';
+    checkmarkInner.style.backgroundColor = '#28a745';
+    checkmarkInner.style.borderRadius = '50%';
+    checkmarkInner.style.display = 'flex';
+    checkmarkInner.style.alignItems = 'center';
+    checkmarkInner.style.justifyContent = 'center';
+    checkmarkInner.style.color = 'white';
+    checkmarkInner.style.fontWeight = 'bold';
+    checkmarkInner.innerHTML = '✓';
+    checkmarkInner.style.fontSize = '20px';
+    
+    checkmark.appendChild(checkmarkInner);
+    checkmark.style.position = 'absolute';
+    checkmark.style.top = '10px';
+    checkmark.style.right = '25px';
+    checkmark.style.zIndex = '100';
+    
+    // Find the image container within the column
+    const imgContainer = selectedContainer.querySelector('.design-image-container');
+    if (imgContainer) {
+      // Add checkmark to the image container
+      imgContainer.style.position = 'relative';
+      imgContainer.appendChild(checkmark);
+      console.log('Checkmark added to design image container');
+    } else {
+      // Fallback: add to the column container
+      selectedContainer.style.position = 'relative';
+      selectedContainer.appendChild(checkmark);
+      console.log('Checkmark added to design column container');
+    }
+    
+    // Add border to the column container
+    selectedContainer.style.border = '3px solid #28a745';
+    selectedContainer.style.borderRadius = '8px';
+    selectedContainer.style.padding = '5px';
+    
+    console.log('Design container highlighted with border');
+  } else {
+    console.log('Could not find the selected design container');
+  }
+  
+  // Update the UI to show the design is selected
+  const statusElement = document.getElementById('generationStatus');
+  if (statusElement) {
+    statusElement.innerHTML = `<div class="alert alert-success">Design selected! Ready to create product.</div>`;
+  }
+  
+  // Update the Create Product button
+  updateCreateProductButton();
+  
+  // Update any other buttons that were waiting for design selection
+  document.querySelectorAll('.needs-design-selection').forEach(element => {
+    if (element.tagName === 'BUTTON') {
+      element.disabled = false;
+      element.textContent = element.textContent.replace('Select design first', 'Create Product');
+    }
+  });
+  
+  // Enable the assign button if it exists
+  const assignBtn = document.getElementById('assignDesignBtn');
+  if (!assignBtn) {
+    // Create an assign button if it doesn't exist
+    const printAreaContainer = document.querySelector('.print-area-container');
+    if (printAreaContainer) {
+      const newAssignBtn = document.createElement('button');
+      newAssignBtn.id = 'assignDesignBtn';
+      newAssignBtn.className = 'btn btn-success btn-lg w-100 mt-3';
+      newAssignBtn.textContent = 'Assign Design to Print Area';
+      newAssignBtn.type = 'button';
+      newAssignBtn.onclick = assignDesignToPrintArea;
+      printAreaContainer.appendChild(newAssignBtn);
+    }
+  } else {
+    assignBtn.disabled = false;
+  }
+  
+  console.log(`Design selected: ${designId}, URL: ${designUrl ? designUrl.substring(0, 30) + '...' : 'undefined'}`);
 }
 
 // Display Generated Designs
 function displayGeneratedDesigns(images) {
-  const designsContainer = document.getElementById('generatedDesigns');
+  // Store the images in our global array for later use
+  storeGeneratedDesigns(images);
+  
+  // Update the Create Product button state
+  updateCreateProductButton();
+  
+  // First make sure we're on the Create Product tab
+  document.getElementById('create-tab').click();
+  
+  // Get or create the designs container
+  let designsContainer = document.getElementById('generatedDesigns');
   if (!designsContainer) {
-    console.error('Generated designs container not found');
-    return;
+    // Try to find a parent element to add the container to
+    const designGenContainer = document.querySelector('.design-generation-container');
+    
+    if (designGenContainer) {
+      designsContainer = document.createElement('div');
+      designsContainer.id = 'generatedDesigns';
+      designsContainer.className = 'row mt-3';
+      designGenContainer.appendChild(designsContainer);
+    } else {
+      console.error('Could not find a place to add designs container');
+      return;
+    }
   }
   
   designsContainer.innerHTML = '';
@@ -228,41 +623,94 @@ function displayGeneratedDesigns(images) {
     return;
   }
   
+  console.log('Displaying generated designs:', images);
+  
+  // Add a clear message to show designs are being displayed
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'col-12 mb-3';
+  messageDiv.innerHTML = '<div class="alert alert-success">Generated designs are ready! Click on an image to select it.</div>';
+  designsContainer.appendChild(messageDiv);
+
   images.forEach((image, index) => {
+    console.log(`Processing image ${index}:`, image);
+    
+    // Create a column for the design
     const col = document.createElement('div');
-    col.className = 'col-md-4 mb-3';
+    col.className = 'col-md-4 mb-4';
+    col.dataset.designId = image.name; // Add data attribute for easier selection
+    col.style.position = 'relative'; // For absolute positioning of checkmark
     
-    const card = document.createElement('div');
-    card.className = 'card h-100';
+    // Create a container for the image (helps with positioning the checkmark)
+    const imgContainer = document.createElement('div');
+    imgContainer.className = 'design-image-container';
+    imgContainer.style.position = 'relative';
+    imgContainer.style.cursor = 'pointer';
     
+    // Create an image element
     const img = document.createElement('img');
-    img.src = image.url;
-    img.className = 'card-img-top';
+    img.src = image.url || image.data;
     img.alt = `Generated Design ${index + 1}`;
-    img.style.cursor = 'pointer';
-    img.onclick = () => selectDesign(image.url);
-    
-    const cardBody = document.createElement('div');
-    cardBody.className = 'card-body';
-    
+    img.dataset.designId = image.name; // Add data attribute to image too
+    img.style.maxHeight = '200px';
+    img.style.display = 'block';
+    img.style.margin = '0 auto';
+    img.style.backgroundColor = '#ffffff';
+    img.style.border = '1px solid #ddd';
+    img.style.borderRadius = '4px';
+    img.style.padding = '5px';
+
+    // Make the container clickable
+    imgContainer.onclick = function() {
+      selectDesign(image.name, image.url || image.data, image.url);
+    };
+
+    // Add the image to the container
+    imgContainer.appendChild(img);
+
+    // Add the container to the column
+    col.appendChild(imgContainer);
+
+    // Add a title under the image
+    const designTitle = document.createElement('h6');
+    designTitle.className = 'text-center mt-2';
+    designTitle.textContent = `Design ${index + 1}`;
+    col.appendChild(designTitle);
+
+    // Add a select button under the title
     const selectBtn = document.createElement('button');
-    selectBtn.className = 'btn btn-sm btn-outline-primary';
+    selectBtn.className = 'btn btn-primary btn-sm d-block mx-auto';
     selectBtn.textContent = 'Select Design';
-    selectBtn.onclick = () => selectDesign(image.url);
-    
+    selectBtn.dataset.designId = image.name; // Store design ID for easy reference
+    selectBtn.onclick = function() {
+      // Clear any previous selection
+      document.querySelectorAll('#generatedDesigns .btn-success').forEach(btn => {
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-primary');
+        btn.textContent = 'Select Design';
+      });
+
+      // Mark this button as selected
+      this.classList.remove('btn-primary');
+      this.classList.add('btn-success');
+      this.textContent = 'Design Selected ✓';
+
+      // Select the design
+      selectDesign(image.name, image.url || image.data, image.url);
+    };
+    col.appendChild(selectBtn);
+
     // Add info about the print area this was generated for
     if (selectedPrintAreaPosition) {
       const infoText = document.createElement('p');
-      infoText.className = 'text-muted small mt-2 mb-0';
+      infoText.className = 'text-muted small mt-2 mb-0 text-center';
       infoText.textContent = `For: ${selectedPrintAreaPosition.charAt(0).toUpperCase() + selectedPrintAreaPosition.slice(1)} (${selectedPrintAreaWidth}x${selectedPrintAreaHeight})`;
-      cardBody.appendChild(infoText);
+      col.appendChild(infoText);
     }
+
+    // Add debug message
+    console.log(`Image ${index} added with source:`, (image.url || '').substring(0, 30) + '...');
     
-    cardBody.appendChild(selectBtn);
-    card.appendChild(img);
-    card.appendChild(cardBody);
-    col.appendChild(card);
-    
+    // Add the column to the designs container
     designsContainer.appendChild(col);
   });
 }
@@ -303,60 +751,94 @@ function changeDesign() {
 
 // Upload Design to Printify
 async function uploadDesignToPrintify() {
-  if (!selectedDesignUrl || !printifyApiKey) return;
-  
-  try {
-    // Extract filename from URL
-    const urlParts = selectedDesignUrl.split('/');
-    const fileName = urlParts[urlParts.length - 1];
-    
-    // Fetch the image data
-    const imgResponse = await fetch(selectedDesignUrl);
-    const blob = await imgResponse.blob();
-    
-    // Convert to base64
-    const reader = new FileReader();
-    reader.readAsDataURL(blob);
-    
-    reader.onloadend = async () => {
-      const base64data = reader.result;
-      
-      try {
-        const response = await fetch(`${API_BASE}/images/upload`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${printifyApiKey}`
-          },
-          body: JSON.stringify({
-            fileName,
-            imageData: base64data
-          })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          selectedDesignId = data.image.id;
-          console.log('Design uploaded successfully:', data.image);
-        } else {
-          console.error('Error uploading design:', data.message);
-        }
-      } catch (error) {
-        console.error('Error uploading design to Printify:', error);
-      }
-    };
-  } catch (error) {
-    console.error('Error processing image:', error);
+  if (!selectedDesignOriginalUrl || !printifyApiKey) {
+    console.error('Missing selectedDesignOriginalUrl or printifyApiKey. Aborting upload.');
+    return;
   }
+  
+  return new Promise((resolve, reject) => {
+    try {
+      // Extract filename from URL
+      const urlParts = selectedDesignOriginalUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      
+      console.log('Attempting to upload image using original URL:', selectedDesignOriginalUrl);
+      console.log('Extracted fileName:', fileName);
+
+      // Ensure fileName and imageUrl are correctly populated before stringifying
+      console.log('Values before JSON.stringify:');
+      console.log('  fileName:', fileName);
+      console.log('  imageUrl:', selectedDesignOriginalUrl);
+
+      const payload = {
+        fileName: fileName,
+        imageUrl: selectedDesignOriginalUrl
+      };
+      
+      console.log('Frontend sending payload object:', payload);
+      const requestBody = JSON.stringify(payload);
+      console.log('Frontend sending JSON string:', requestBody);
+
+      // Use XMLHttpRequest for more detailed debugging
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/images/upload`, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('Authorization', `Bearer ${printifyApiKey}`);
+      
+      xhr.onreadystatechange = function() {
+        console.log('XHR state change:', xhr.readyState, 'status:', xhr.status);
+        
+        if (xhr.readyState === 4) {
+          console.log('XHR complete. Status:', xhr.status);
+          console.log('Response headers:', xhr.getAllResponseHeaders());
+          console.log('Response text:', xhr.responseText);
+          
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              console.log('Parsed response data:', data);
+              
+              if (data.success) {
+                selectedDesignId = data.image.id;
+                console.log('Design uploaded successfully:', data.image);
+                resolve(data);
+              } else {
+                console.error('Error uploading design:', data.message);
+                reject(new Error(data.message || 'Unknown error'));
+              }
+            } catch (parseError) {
+              console.error('Error parsing response:', parseError);
+              reject(parseError);
+            }
+          } else {
+            console.error('HTTP error:', xhr.status, xhr.statusText);
+            reject(new Error(`HTTP error: ${xhr.status}`));
+          }
+        }
+      };
+      
+      xhr.onerror = function(error) {
+        console.error('XHR error:', error);
+        reject(error);
+      };
+      
+      console.log('Sending XHR request with body:', requestBody);
+      xhr.send(requestBody);
+      
+    } catch (error) {
+      console.error('Error in uploadDesignToPrintify function:', error);
+      reject(error);
+    }
+  });
 }
 
 // Load Products
 async function loadProducts() {
   if (!selectedShopId || !printifyApiKey) return;
   
-  productsLoading.style.display = 'block';
-  productsList.innerHTML = '';
+  // Add null checks for DOM elements
+  if (productsLoading) productsLoading.style.display = 'block';
+  if (productsList) productsList.innerHTML = '';
   
   try {
     const response = await fetch(`${API_BASE}/shops/${selectedShopId}/products`, {
@@ -375,14 +857,25 @@ async function loadProducts() {
     }
   } catch (error) {
     console.error('Error loading products:', error);
-    productsList.innerHTML = '<div class="col-12"><div class="alert alert-danger">Error loading products. Please try again.</div></div>';
+    if (productsList) {
+      productsList.innerHTML = '<div class="col-12"><div class="alert alert-danger">Error loading products. Please try again.</div></div>';
+    }
   } finally {
-    productsLoading.style.display = 'none';
+    // Add null check for productsLoading
+    if (productsLoading) {
+      productsLoading.style.display = 'none';
+    }
   }
 }
 
 // Display Products
 function displayProducts(products) {
+  // Check if productsList exists
+  if (!productsList) {
+    console.error('productsList element not found');
+    return;
+  }
+  
   if (!products || products.length === 0) {
     productsList.innerHTML = '<div class="col-12"><div class="alert alert-info">No products found. Create your first product in the Create Product tab.</div></div>';
     return;
@@ -392,10 +885,10 @@ function displayProducts(products) {
   
   products.forEach(product => {
     const colDiv = document.createElement('div');
-    colDiv.className = 'col-md-4 col-sm-6';
+    colDiv.className = 'col-md-4 col-sm-6 mb-4';
     
     const cardDiv = document.createElement('div');
-    cardDiv.className = 'card product-card';
+    cardDiv.className = 'card product-card h-100';
     
     const imgContainer = document.createElement('div');
     imgContainer.className = 'product-img-container';
@@ -406,7 +899,7 @@ function displayProducts(products) {
     img.alt = product.title;
     
     const cardBody = document.createElement('div');
-    cardBody.className = 'card-body';
+    cardBody.className = 'card-body d-flex flex-column';
     
     const title = document.createElement('h5');
     title.className = 'card-title';
@@ -420,18 +913,42 @@ function displayProducts(products) {
     status.className = `badge ${product.is_locked ? 'bg-warning' : 'bg-success'}`;
     status.textContent = product.is_locked ? 'Draft' : 'Published';
     
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'mt-auto d-flex flex-wrap gap-2';
+    
     const viewBtn = document.createElement('a');
     viewBtn.className = 'btn btn-sm btn-outline-primary';
     viewBtn.href = `https://printify.com/app/shop/${selectedShopId}/products/${product.id}`;
     viewBtn.target = '_blank';
     viewBtn.textContent = 'View in Printify';
     
+    // Add Update button
+    const updateBtn = document.createElement('button');
+    updateBtn.className = 'btn btn-sm btn-outline-success';
+    updateBtn.textContent = 'Update';
+    updateBtn.dataset.productId = product.id;
+    updateBtn.onclick = () => updateProduct(product.id);
+    
+    // Add Publish button if product is not published
+    if (product.is_locked) {
+      const publishBtn = document.createElement('button');
+      publishBtn.className = 'btn btn-sm btn-outline-warning';
+      publishBtn.textContent = 'Publish';
+      publishBtn.dataset.productId = product.id;
+      publishBtn.onclick = () => {
+        currentProduct = product;
+        publishProduct(publishBtn);
+      };
+      buttonContainer.appendChild(publishBtn);
+    }
+    
     imgContainer.appendChild(img);
     cardBody.appendChild(title);
     cardBody.appendChild(description);
     cardBody.appendChild(status);
-    cardBody.appendChild(document.createElement('br'));
-    cardBody.appendChild(viewBtn);
+    buttonContainer.appendChild(viewBtn);
+    buttonContainer.appendChild(updateBtn);
+    cardBody.appendChild(buttonContainer);
     
     cardDiv.appendChild(imgContainer);
     cardDiv.appendChild(cardBody);
@@ -550,6 +1067,9 @@ function displayPrintAreas(placeholders) {
   
   console.log('Placeholders data:', placeholders);
   
+  // Store placeholders globally for later use
+  currentPlaceholders = placeholders;
+  
   // Process placeholders from Printify API
   placeholders.forEach((placeholder, index) => {
     // Get position from any possible property
@@ -562,14 +1082,20 @@ function displayPrintAreas(placeholders) {
       return;
     }
     
+    // Get dimensions from the placeholder or use defaults
+    const width = placeholder.width || 1000;
+    const height = placeholder.height || 1000;
+    
     const areaDiv = document.createElement('div');
     areaDiv.className = 'print-area-item card mb-3 p-2';
     areaDiv.dataset.areaId = areaId;
     areaDiv.dataset.position = position;
+    areaDiv.dataset.width = width;
+    areaDiv.dataset.height = height;
     
     // Make the entire area clickable for selection
     areaDiv.style.cursor = 'pointer';
-    areaDiv.onclick = () => selectPrintArea(areaId, position, areaDiv);
+    areaDiv.onclick = () => selectPrintArea(areaId, position, areaDiv, width, height);
     
     // Capitalize the first letter of the position (e.g., "front" -> "Front")
     const areaTitle = document.createElement('h6');
@@ -579,8 +1105,8 @@ function displayPrintAreas(placeholders) {
     areaDescription.className = 'text-muted small';
     
     // Show dimensions if available
-    if (placeholder.width && placeholder.height) {
-      areaDescription.textContent = `Size: ${placeholder.width}x${placeholder.height} px`;
+    if (width && height) {
+      areaDescription.textContent = `Size: ${width}x${height} px`;
     } else {
       areaDescription.textContent = 'Print area dimensions will be determined by the product';
     }
@@ -612,26 +1138,41 @@ function displayPrintAreas(placeholders) {
   if (printAreasList.children.length === 0) {
     printAreasList.innerHTML = '<div class="alert alert-warning">No valid print areas found for this product.</div>';
   }
+  
+  // Remove any existing design generation section when loading new print areas
+  const existingDesignGenSection = document.getElementById('designGenSection');
+  if (existingDesignGenSection) {
+    existingDesignGenSection.remove();
+  }
 }
 
 // Select Print Area
-function selectPrintArea(areaId, position, clickedElement) {
+function selectPrintArea(areaId, position, clickedElement, width, height) {
   // Update the global selected print area ID
   selectedPrintAreaId = areaId;
-  console.log(`Selected print area: ${areaId}, position: ${position}`);
+  console.log(`Selected print area: ${areaId}, position: ${position}, dimensions: ${width}x${height}`);
   
-  // Store the selected print area dimensions
-  const selectedPlaceholder = currentPlaceholders.find(p => {
-    const placeholderId = p.id || p.placeholder_id || p.print_area_id;
-    return placeholderId === areaId;
-  });
+  // Store the selected print area dimensions from parameters
+  selectedPrintAreaWidth = width || 1000;
+  selectedPrintAreaHeight = height || 1000;
+  selectedPrintAreaPosition = position || 'front';
   
-  if (selectedPlaceholder) {
-    selectedPrintAreaWidth = selectedPlaceholder.width || 1000;
-    selectedPrintAreaHeight = selectedPlaceholder.height || 1000;
-    selectedPrintAreaPosition = position || 'front';
-    console.log(`Print area dimensions: ${selectedPrintAreaWidth}x${selectedPrintAreaHeight}`);
+  // If dimensions weren't provided in parameters, try to find them in placeholders
+  if ((!width || !height) && Array.isArray(currentPlaceholders)) {
+    const selectedPlaceholder = currentPlaceholders.find(p => {
+      const placeholderId = p.id || p.placeholder_id || p.print_area_id;
+      return placeholderId === areaId;
+    });
+    
+    if (selectedPlaceholder) {
+      selectedPrintAreaWidth = selectedPlaceholder.width || selectedPrintAreaWidth;
+      selectedPrintAreaHeight = selectedPlaceholder.height || selectedPrintAreaHeight;
+      console.log(`Print area dimensions from placeholder: ${selectedPrintAreaWidth}x${selectedPrintAreaHeight}`);
+    }
   }
+  
+  console.log(`Using print area dimensions: ${selectedPrintAreaWidth}x${selectedPrintAreaHeight}`);
+
   
   // Update UI to show selection
   const allAreas = document.querySelectorAll('.print-area-item');
@@ -646,60 +1187,94 @@ function selectPrintArea(areaId, position, clickedElement) {
   const badge = clickedElement.querySelector('.selection-indicator .badge');
   if (badge) badge.classList.remove('d-none');
   
-  // Show the design generation form directly under this print area
-  const designGenSection = document.getElementById('designGenSection');
-  if (designGenSection) {
-    // Remove it from its current location
-    designGenSection.remove();
-    
-    // Create a new container for it
-    const designGenContainer = document.createElement('div');
-    designGenContainer.id = 'designGenSection';
-    designGenContainer.className = 'mt-3 p-3 border rounded bg-light';
-    
-    // Add title with print area information
-    const title = document.createElement('h5');
-    title.textContent = `Generate Design for ${position.charAt(0).toUpperCase() + position.slice(1)}`;
-    designGenContainer.appendChild(title);
-    
-    // Add size information
-    const sizeInfo = document.createElement('p');
-    sizeInfo.className = 'text-muted small';
-    sizeInfo.textContent = `Target size: ${selectedPrintAreaWidth}x${selectedPrintAreaHeight} px`;
-    designGenContainer.appendChild(sizeInfo);
-    
-    // Add the prompt input
-    const promptGroup = document.createElement('div');
-    promptGroup.className = 'mb-3';
-    promptGroup.innerHTML = `
-      <label for="designPrompt" class="form-label">Design Description</label>
-      <textarea id="designPrompt" class="form-control" rows="3" placeholder="Describe the design you want to generate..."></textarea>
-    `;
-    designGenContainer.appendChild(promptGroup);
-    
-    // Add the generate button
-    const generateBtn = document.createElement('button');
-    generateBtn.id = 'generateDesignBtn';
-    generateBtn.className = 'btn btn-primary';
-    generateBtn.textContent = 'Generate Design';
-    generateBtn.onclick = () => generateDesignForPrintArea();
-    designGenContainer.appendChild(generateBtn);
-    
-    // Add status area
-    const statusDiv = document.createElement('div');
-    statusDiv.id = 'generationStatus';
-    statusDiv.className = 'mt-3';
-    designGenContainer.appendChild(statusDiv);
-    
-    // Add designs container
-    const designsContainer = document.createElement('div');
-    designsContainer.id = 'generatedDesigns';
-    designsContainer.className = 'mt-3 row';
-    designGenContainer.appendChild(designsContainer);
-    
-    // Add the design generation section after the clicked print area
-    clickedElement.after(designGenContainer);
+  // Remove any existing design generation section
+  const existingDesignGenSection = document.getElementById('designGenSection');
+  if (existingDesignGenSection) {
+    existingDesignGenSection.remove();
   }
+  
+  // Create a new design generation container
+  const designGenContainer = document.createElement('div');
+  designGenContainer.id = 'designGenSection';
+  designGenContainer.className = 'mt-3 p-3 border rounded bg-light';
+  
+  // Add title with print area information
+  const title = document.createElement('h5');
+  title.textContent = `Generate Design for ${position.charAt(0).toUpperCase() + position.slice(1)}`;
+  designGenContainer.appendChild(title);
+  
+  // Add size information
+  const sizeInfo = document.createElement('p');
+  sizeInfo.className = 'text-muted small';
+  sizeInfo.textContent = `Target size: ${selectedPrintAreaWidth}x${selectedPrintAreaHeight} px`;
+  designGenContainer.appendChild(sizeInfo);
+  
+  // Add the prompt input
+  const promptGroup = document.createElement('div');
+  promptGroup.className = 'mb-3';
+  promptGroup.innerHTML = `
+    <label for="designPrompt" class="form-label">Design Description</label>
+    <textarea id="designPrompt" class="form-control" rows="4" placeholder="Describe the design you want to generate... (Example: A cute cartoon cat with sunglasses for a t-shirt)"></textarea>
+    <div class="form-text">Enter your design idea above, then click Generate Design</div>
+  `;
+  designGenContainer.appendChild(promptGroup);
+  
+  // Add event listener to capture the prompt value as it's typed
+  setTimeout(() => {
+    const promptTextarea = document.getElementById('designPrompt');
+    if (promptTextarea) {
+      promptTextarea.addEventListener('input', function(e) {
+        currentDesignPrompt = e.target.value;
+        console.log('Prompt updated:', currentDesignPrompt);
+      });
+    }
+  }, 100); // Small timeout to ensure the element is in the DOM
+  
+  // Add the generate button
+  const generateBtn = document.createElement('button');
+  generateBtn.id = 'printAreaDesignBtn'; // Changed ID to avoid conflict with main generate button
+  generateBtn.className = 'btn btn-primary btn-lg w-100';
+  generateBtn.innerHTML = '<i class="bi bi-magic"></i> Generate Design for this Print Area';
+  generateBtn.type = 'button'; // Explicitly set type to button to prevent form submission
+  generateBtn.onclick = function(event) {
+    console.log('Print area design button clicked!');
+    
+    // Prevent any form submission
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Get the actual prompt from the textarea
+    const promptElement = document.getElementById('designPrompt');
+    if (!promptElement || !promptElement.value.trim()) {
+      alert('Please enter a design prompt.');
+      // Re-enable the button if the prompt is empty
+      const generateBtn = document.getElementById('printAreaDesignBtn');
+      if(generateBtn) generateBtn.disabled = false;
+      return;
+    }
+    const prompt = promptElement.value.trim();
+    console.log('Using prompt from user:', prompt);
+    console.log('Calling generateDesignWithDetails with dimensions:', selectedPrintAreaWidth, 'x', selectedPrintAreaHeight);
+
+    // Call the function with the clean prompt and dimensions
+    generateDesignWithDetails(prompt, selectedPrintAreaWidth, selectedPrintAreaHeight);
+  };
+  designGenContainer.appendChild(generateBtn);
+  
+  // Add status area for generation feedback
+  const statusArea = document.createElement('div');
+  statusArea.id = 'generationStatus';
+  statusArea.className = 'mt-3';
+  designGenContainer.appendChild(statusArea);
+  
+  // Add container for generated designs
+  const designsContainer = document.createElement('div');
+  designsContainer.id = 'generatedDesigns';
+  designsContainer.className = 'row mt-3';
+  designGenContainer.appendChild(designsContainer);
+  
+  // Insert the design generation section after the clicked element
+  clickedElement.parentNode.insertBefore(designGenContainer, clickedElement.nextSibling);
   
   // If we have a design selected, show assign button
   if (selectedDesignUrl) {
@@ -829,13 +1404,6 @@ async function loadVariants() {
     document.getElementById('variantsLoading').style.display = 'none';
   }
 }
-
-// Global variables to store placeholders and selected print area
-let currentPlaceholders = [];
-let selectedPrintAreaId = null;
-let selectedPrintAreaPosition = null;
-let selectedPrintAreaWidth = 1000;
-let selectedPrintAreaHeight = 1000;
 
 // Display Variants
 function displayVariants(variantData) {
@@ -995,31 +1563,102 @@ function displayVariants(variantData) {
   }
 }
 
-// Handle Product Creation
+// Handle Product Creation and Updates
 async function handleProductCreation(event) {
-  event.preventDefault();
-  
-  if (!printifyApiKey || !selectedShopId) {
-    alert('Please verify your API key and select a shop first.');
+  // Make event parameter optional
+  if (event && event.preventDefault) {
+    event.preventDefault();
+  }
+  if (!selectedShopId || !printifyApiKey) {
+    alert('Please select a shop first');
     return;
   }
   
-  if (!selectedDesignId) {
-    alert('Please select a design first.');
+  // Validate required fields
+  const productTitle = document.getElementById('productTitle').value.trim();
+  if (!productTitle) {
+    alert('Product title is required');
     return;
   }
   
-  const title = document.getElementById('productTitle').value.trim();
-  const description = document.getElementById('productDescription').value.trim();
-  const blueprintId = blueprintSelect.value;
-  const printProviderId = providerSelect.value;
-  
-  if (!title || !description || !blueprintId || !printProviderId) {
-    alert('Please fill in all required fields.');
+  const createBtn = document.getElementById('createProductBtn');
+  const isUpdateMode = createBtn && createBtn.dataset.mode === 'update';
+  const productId = isUpdateMode ? createBtn.dataset.productId : null;
+
+  // If we are in update mode, call the dedicated update function
+  if (isUpdateMode) {
+    await updateExistingProduct(productId);
+    return;
+  }
+
+  // --- Logic for CREATING a new product ---
+
+  if (createBtn) {
+    createBtn.disabled = true;
+    createBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading Image...`;
+  }
+
+  // Check if we have a design selected
+  if (!selectedDesignOriginalUrl) {
+    alert('Please select a design to create a product.');
+     if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.innerHTML = 'Create Product';
+    }
     return;
   }
   
-  // Get selected variants - flexible approach to handle any structure
+  // First, upload the image to Printify directly
+  let printifyImageId = null;
+  try {
+    console.log('Uploading image to Printify for new product...');
+    console.log('Using direct image URL for Printify upload:', selectedDesignOriginalUrl);
+      
+    // Upload using the direct URL
+    const uploadResponse = await fetch(`${API_BASE}/images/upload`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${printifyApiKey}`
+      },
+      body: JSON.stringify({
+        fileName: `design_${Date.now()}.png`,
+        imageUrl: selectedDesignOriginalUrl
+      })
+    });
+    
+    if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.message || `HTTP error ${uploadResponse.status}`);
+    }
+    
+    const uploadResult = await uploadResponse.json();
+    const imageData = uploadResult.image || uploadResult;
+    
+    if (!imageData || !imageData.id || typeof imageData.id !== 'string') {
+      throw new Error(`Invalid image ID received from Printify: ${imageData ? imageData.id : 'undefined'}`);
+    }
+    
+    printifyImageId = imageData.id;
+    printifyImageWidth = imageData.width || 1000;
+    printifyImageHeight = imageData.height || 1000;
+    
+    console.log('Image uploaded successfully to Printify with ID:', printifyImageId);
+    
+    if (createBtn) {
+      createBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
+    }
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    alert(`Error uploading image: ${error.message}`);
+    if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.innerHTML = 'Create Product';
+    }
+    return;
+  }
+  
+  // Get selected variants
   const selectedVariants = [];
   const variantCheckboxes = document.querySelectorAll('.variant-item input[type="checkbox"]:checked');
   const variantPrices = document.querySelectorAll('.variant-item .variant-price');
@@ -1029,125 +1668,67 @@ async function handleProductCreation(event) {
     return;
   }
   
-  console.log(`Found ${variantCheckboxes.length} selected variants`);
-  
   variantCheckboxes.forEach(checkbox => {
-    const variantId = checkbox.dataset.variantId;
-    let price = 1999; // Default price in cents
+    const variantId = parseInt(checkbox.dataset.variantId, 10);
+    let price = 1999;
     
-    // Find corresponding price input
     variantPrices.forEach(priceInput => {
-      if (priceInput.dataset.variantId === variantId) {
-        // Convert from dollars to cents for API
+      if (parseInt(priceInput.dataset.variantId, 10) === variantId) {
         price = Math.round(parseFloat(priceInput.value) * 100);
       }
     });
     
-    // Handle variant IDs that might be stored as JSON strings
-    let processedId = variantId;
-    if (variantId.startsWith('{') || variantId.startsWith('[')) {
-      try {
-        // Try to extract id from JSON string
-        const parsedVariant = JSON.parse(variantId);
-        processedId = parsedVariant.id || parsedVariant.variant_id || variantId;
-      } catch (e) {
-        console.log('Could not parse variant ID JSON:', e);
-      }
-    }
-    
     selectedVariants.push({
-      id: processedId,
+      id: variantId,
       price: price,
       is_enabled: true
     });
   });
   
-  console.log('Selected variants for product creation:', selectedVariants);
-  
-  // Get print areas with assigned designs - flexible approach
-  const printAreasWithDesigns = {};
-  
-  // First check if we have any designs assigned
-  if (!selectedDesignUrl) {
-    alert('Please generate and select a design first');
-    return;
-  }
-  
-  // Check if we have a selected print area
-  if (selectedPrintAreaId) {
-    console.log('Selected print area ID:', selectedPrintAreaId);
-    console.log('Selected print area position:', selectedPrintAreaPosition);
-    console.log('Current placeholders:', currentPlaceholders);
-    
-    // Use the stored position if available
-    if (selectedPrintAreaPosition) {
-      printAreasWithDesigns[selectedPrintAreaPosition] = {
-        image_url: selectedDesignUrl
-      };
-      
-      console.log(`Using stored position: ${selectedPrintAreaPosition}`);
-    } else {
-      // Find the corresponding placeholder in currentPlaceholders
-      // Handle different possible structures
-      let selectedArea = null;
-      
-      if (Array.isArray(currentPlaceholders)) {
-        selectedArea = currentPlaceholders.find(area => {
-          const areaId = area.id || area.placeholder_id || area.print_area_id;
-          return areaId === selectedPrintAreaId;
-        });
-      }
-      
-      if (selectedArea) {
-        // Get the position - could be in different properties
-        const position = selectedArea.position || selectedArea.placement || 'front';
-        
-        printAreasWithDesigns[position] = {
-          image_url: selectedDesignUrl
-        };
-        
-        console.log(`Assigned design to print area position: ${position}`);
-      } else {
-        // If we can't find the exact area, use a default position
-        console.log('Could not find selected print area, using default position');
-        printAreasWithDesigns['front'] = {
-          image_url: selectedDesignUrl
-        };
-      }
-    }
-  } else {
-    // If no specific area was selected but we have a design, use default position
-    printAreasWithDesigns['front'] = {
-      image_url: selectedDesignUrl
-    };
-    console.log('No print area selected, using default front position');
-  }
-  
-  // Convert print areas object to array format required by API
+  // Prepare print areas with the new image ID
   const printAreasArray = [];
-  for (const position in printAreasWithDesigns) {
-    printAreasArray.push({
-      placement: position,
-      images: [{ 
-        id: 'design-image',
-        url: printAreasWithDesigns[position].image_url
-      }]
-    });
+  const variantIds = selectedVariants.map(v => v.id);
+  
+  // This example assumes one design is applied to the selected print area
+  const position = selectedPrintAreaPosition || 'front'; 
+  
+  let scale = 1;
+  if (printifyImageWidth && printifyImageHeight && selectedPrintAreaWidth && selectedPrintAreaHeight) {
+      const widthRatio = selectedPrintAreaWidth / printifyImageWidth;
+      const heightRatio = selectedPrintAreaHeight / printifyImageHeight;
+      scale = Math.min(widthRatio, heightRatio) * 0.9;
+      scale = Math.max(0.1, Math.min(1.0, scale));
   }
   
-  console.log('Print areas for product creation:', printAreasArray);
+  printAreasArray.push({
+    variant_ids: variantIds,
+    placeholders: [{
+      position: position,
+      images: [{ 
+        id: printifyImageId,
+        x: 0.5,
+        y: 0.5,
+        scale: scale,
+        angle: 0
+      }]
+    }]
+  });
+
+  const blueprintId = document.getElementById('blueprintSelect').value;
+  const printProviderId = document.getElementById('providerSelect').value;
+  const title = document.getElementById('productTitle').value.trim();
+  const description = document.getElementById('productDescription').value.trim() || title;
   
-  // Prepare the product creation payload - follow Printify API schema exactly
   const productData = {
-    title: title,
-    description: document.getElementById('productDescription').value || 'Custom designed product',
+    title,
+    description,
     blueprint_id: parseInt(blueprintId),
     print_provider_id: parseInt(printProviderId),
     variants: selectedVariants,
     print_areas: printAreasArray
   };
   
-  console.log('Creating product with data:', productData);
+  console.log('Creating product with payload:', JSON.stringify(productData));
   
   try {
     const response = await fetch(`${API_BASE}/shops/${selectedShopId}/products.json`, {
@@ -1164,61 +1745,339 @@ async function handleProductCreation(event) {
     if (response.ok) {
       console.log('Product created successfully:', result);
       currentProduct = result;
+      if (document.activeElement) document.activeElement.blur();
       productCreatedModal.show();
+      resetProductForm();
     } else {
       console.error('Error creating product:', result);
-      alert(`Error creating product: ${result.message || 'Unknown error'}`);
-      console.log('Full error details:', result);
+      alert(`Error creating product: ${result.message || JSON.stringify(result.errors)}`);
     }
   } catch (error) {
-    console.error('Error creating product:', error);
-    alert('Error creating product. Please try again.');
+    console.error('Error in fetch call for product creation:', error);
+    alert('An unexpected error occurred while creating the product.');
+  } finally {
+      if (createBtn) {
+        createBtn.disabled = false;
+        createBtn.innerHTML = 'Create Product';
+      }
   }
 }
 
 // Publish Product
 async function publishProduct() {
-  if (!currentProduct || !selectedShopId || !printifyApiKey) {
-    alert('No product to publish.');
+  if (!currentProduct || !currentProduct.id) {
+    alert('No product to publish');
     return;
   }
   
+  const publishBtn = document.getElementById('publishProductBtn');
+  
   try {
-    const response = await fetch(`${API_BASE}/shops/${selectedShopId}/products/${currentProduct.id}/publish`, {
+    if (publishBtn) {
+      publishBtn.disabled = true;
+      publishBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Publishing...';
+    }
+    
+    const publishData = {
+      title: true,
+      description: true,
+      images: true,
+      variants: true,
+      tags: true,
+      shipping_template: true
+    };
+    
+    const response = await fetch(`${API_BASE}/shops/${selectedShopId}/products/${currentProduct.id}/publish.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${printifyApiKey}`
       },
-      body: JSON.stringify({ publishData: {} })
+      body: JSON.stringify(publishData)
     });
     
     const data = await response.json();
     
-    if (data.success) {
-      alert('Product published successfully!');
-      productCreatedModal.hide();
-      loadProducts();
-      resetProductForm();
+    if (response.ok) {
+        // The "publishing_succeeded" step is often not required and can cause issues.
+        // The standard publish call is usually sufficient.
+        console.log('Publish command sent successfully:', data);
+        productCreatedModal.hide();
+        setTimeout(() => {
+            alert('Product published successfully! It may take a few moments to appear in your store.');
+            loadProducts();
+            resetProductForm();
+        }, 300);
     } else {
+      console.error('Error publishing product:', data);
       alert(`Error publishing product: ${data.message || 'Unknown error'}`);
     }
   } catch (error) {
     console.error('Error publishing product:', error);
     alert('Error publishing product. Please try again.');
+  } finally {
+      if (publishBtn) {
+        publishBtn.disabled = false;
+        publishBtn.innerHTML = 'Publish Now';
+    }
+  }
+}
+
+// Update Product (Load data into form)
+async function updateProduct(productId) {
+  if (!selectedShopId || !printifyApiKey || !productId) {
+    alert('Missing required information to update the product');
+    return;
+  }
+  
+  try {
+    console.log(`Fetching product ${productId} for shop ${selectedShopId}`);
+    const url = `${API_BASE}/shops/${selectedShopId}/products/${productId}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${printifyApiKey}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP error ${response.status}`);
+    }
+    
+    const productData = await response.json();
+    const product = productData.product || productData;
+    
+    if (!product || typeof product !== 'object') {
+      throw new Error('Invalid product data received');
+    }
+    
+    currentProduct = product;
+    
+    console.log('Product data retrieved for update:', product);
+    
+    document.getElementById('create-tab').click();
+    
+    // Populate form
+    document.getElementById('productTitle').value = product.title || '';
+    document.getElementById('productDescription').value = product.description || '';
+    
+    // Set blueprint and trigger provider load
+    blueprintSelect.value = product.blueprint_id;
+    await handleBlueprintSelection(); // Wait for providers to load
+    
+    // Set provider and trigger variant load
+    providerSelect.value = product.print_provider_id;
+    await loadVariants(); // Wait for variants to load
+    
+    // Update variants in the form with existing data
+    const variantCheckboxes = document.querySelectorAll('.variant-item input[type="checkbox"]');
+    const variantPrices = document.querySelectorAll('.variant-item .variant-price');
+    
+    variantCheckboxes.forEach(checkbox => {
+        const variantId = parseInt(checkbox.dataset.variantId);
+        const productVariant = product.variants.find(v => v.id === variantId);
+        if (productVariant) {
+            checkbox.checked = productVariant.is_enabled;
+            variantPrices.forEach(priceInput => {
+                if(parseInt(priceInput.dataset.variantId) === variantId) {
+                    priceInput.value = (productVariant.price / 100).toFixed(2);
+                }
+            });
+        } else {
+            checkbox.checked = false;
+        }
+    });
+
+    // Update button to "Update" mode
+    const createBtn = document.getElementById('createProductBtn');
+    if (createBtn) {
+      createBtn.textContent = 'Update Product';
+      createBtn.dataset.mode = 'update';
+      createBtn.dataset.productId = productId;
+      // An existing product doesn't need a new design to be selected to update
+      createBtn.disabled = false; 
+    }
+  } catch (error) {
+    console.error('Error fetching product data for update:', error);
+    alert(`Error fetching product data: ${error.message}`);
+    resetProductForm();
+  }
+}
+
+// ==================================================================
+//               CORRECTED updateExistingProduct FUNCTION
+// ==================================================================
+async function updateExistingProduct(productId) {
+  if (!selectedShopId || !printifyApiKey || !productId) {
+    alert('Missing required information to update the product');
+    return;
+  }
+
+  const createBtn = document.getElementById('createProductBtn');
+  if (createBtn) {
+    createBtn.disabled = true;
+    createBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Updating...`;
+  }
+
+  try {
+    // 1. Fetch the full, current product data
+    console.log(`Fetching full product details for update: ${productId}`);
+    const productResponse = await fetch(`${API_BASE}/shops/${selectedShopId}/products/${productId}`, {
+      headers: { 'Authorization': `Bearer ${printifyApiKey}` }
+    });
+
+    if (!productResponse.ok) {
+      throw new Error(`Failed to fetch product details: ${productResponse.status}`);
+    }
+    const fullProductData = await productResponse.json();
+    const existingProduct = fullProductData.product || fullProductData;
+
+    // 2. Check if a NEW design has been selected to upload and replace the old one
+    let imageIdToUse;
+    if (selectedDesignOriginalUrl) {
+        console.log('New design selected. Uploading to Printify to get a new ID...');
+        const uploadResponse = await fetch(`${API_BASE}/images/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${printifyApiKey}` },
+            body: JSON.stringify({
+                fileName: `design_update_${Date.now()}.png`,
+                imageUrl: selectedDesignOriginalUrl
+            })
+        });
+        if (!uploadResponse.ok) throw new Error('Failed to upload new design for update.');
+        const uploadResult = await uploadResponse.json();
+        imageIdToUse = (uploadResult.image || uploadResult).id;
+        console.log(`Using new uploaded image ID: ${imageIdToUse}`);
+    } else {
+        // 3. NO new design. Find the EXISTING image ID from the product data.
+        console.log('No new design selected. Finding existing image ID...');
+        if (existingProduct.print_areas && existingProduct.print_areas[0]?.placeholders[0]?.images[0]?.id) {
+            imageIdToUse = existingProduct.print_areas[0].placeholders[0].images[0].id;
+            console.log(`Found existing image ID in print_areas: ${imageIdToUse}`);
+        } else {
+            throw new Error('Could not find an existing image ID in the product data. Cannot update without an image.');
+        }
+    }
+
+    if (!imageIdToUse) {
+        throw new Error('Failed to determine which image ID to use for the update.');
+    }
+
+    // 4. Get variants and other data from the form
+    const selectedVariants = [];
+    document.querySelectorAll('.variant-item').forEach(item => {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        const priceInput = item.querySelector('.variant-price');
+        const variantId = parseInt(checkbox.dataset.variantId);
+        
+        selectedVariants.push({
+            id: variantId,
+            price: Math.round(parseFloat(priceInput.value) * 100),
+            is_enabled: checkbox.checked
+        });
+    });
+
+    const variantIds = selectedVariants.filter(v => v.is_enabled).map(v => v.id);
+
+    // 5. Build the update payload using data from the form and the correct image ID
+    const updatePayload = {
+      title: document.getElementById('productTitle').value.trim(),
+      description: document.getElementById('productDescription').value.trim(),
+      blueprint_id: existingProduct.blueprint_id,
+      print_provider_id: existingProduct.print_provider_id,
+      variants: selectedVariants,
+      print_areas: [{
+        variant_ids: variantIds,
+        placeholders: [{
+          position: selectedPrintAreaPosition || 'front',
+          images: [{
+            id: imageIdToUse,
+            x: 0.5,
+            y: 0.5,
+            scale: 1, // You might want to recalculate scale if image dimensions change
+            angle: 0
+          }]
+        }]
+      }]
+    };
+    
+    console.log('Sending update payload:', JSON.stringify(updatePayload));
+    
+    // 6. Send the PUT request
+    const updateResponse = await fetch(`${API_BASE}/shops/${selectedShopId}/products/${productId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${printifyApiKey}`
+      },
+      body: JSON.stringify(updatePayload)
+    });
+    
+    if (!updateResponse.ok) {
+      const errorData = await updateResponse.json();
+      console.error('Update error details:', errorData);
+      throw new Error(errorData.message || `HTTP error ${updateResponse.status}`);
+    }
+    
+    const data = await updateResponse.json();
+    console.log('Product update successful:', data);
+    
+    alert(`Product "${updatePayload.title}" updated successfully!`);
+    resetProductForm();
+    loadProducts(); // Refresh the products list
+    
+  } catch (error) {
+    console.error('Error updating product:', error);
+    alert(`Error updating product: ${error.message}`);
+  } finally {
+    if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.innerHTML = 'Create Product';
+      createBtn.dataset.mode = 'create';
+      delete createBtn.dataset.productId;
+    }
   }
 }
 
 // Reset Product Form
 function resetProductForm() {
-  document.getElementById('productTitle').value = '';
-  document.getElementById('productDescription').value = '';
-  blueprintSelect.selectedIndex = 0;
-  providerSelect.innerHTML = '<option selected disabled value="">Select product type first...</option>';
-  providerSelect.disabled = true;
-  variantsList.innerHTML = '<p class="text-muted">Select a product type and print provider to see available variants</p>';
-  printAreasList.innerHTML = '<p class="text-muted">Select a product type to see available print areas</p>';
-  selectedDesignContainer.innerHTML = '<p class="text-muted">No design selected. Generate or select a design from the Generate Design tab.</p>';
-  selectedDesignId = '';
+  // Reset form fields
+  if(createProductForm) createProductForm.reset();
+  if(blueprintSelect) blueprintSelect.selectedIndex = 0;
+
+  // Reset create button to normal mode
+  const createBtn = document.getElementById('createProductBtn');
+  if (createBtn) {
+    createBtn.textContent = 'Create Product';
+    createBtn.dataset.mode = 'create';
+    delete createBtn.dataset.productId;
+  }
+  
+  // Reset UI sections
+  if(providerSelect) {
+      providerSelect.innerHTML = '<option selected disabled value="">Select product type first...</option>';
+      providerSelect.disabled = true;
+  }
+  if(variantsList) variantsList.innerHTML = '<p class="text-muted">Select a product type and print provider to see available variants</p>';
+  if(printAreasList) printAreasList.innerHTML = '<p class="text-muted">Select a product type to see available print areas</p>';
+  
+  const designGenSection = document.getElementById('designGenSection');
+  if (designGenSection) designGenSection.remove();
+  
+  const generatedDesignsContainer = document.getElementById('generatedDesigns');
+  if(generatedDesignsContainer) generatedDesignsContainer.innerHTML = '';
+
+  // Reset global state variables
+  selectedDesignId = null;
+  selectedDesignUrl = null;
+  selectedDesignOriginalUrl = null;
   currentProduct = null;
+  generatedDesigns = [];
+  
+  updateCreateProductButton();
+
+  // Switch back to the products tab
+  document.getElementById('products-tab').click();
 }
