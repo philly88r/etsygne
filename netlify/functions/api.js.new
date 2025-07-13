@@ -1,0 +1,548 @@
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+
+// Configuration
+const PRINTIFY_API_BASE_URL = 'https://api.printify.com/v1';
+const GOOGLE_API_KEY = 'AIzaSyAXvOheDSSeftRXkZgr9mLAkzfAqSOLwFg';
+
+// Helper function to make requests to Printify API
+async function printifyRequest(endpoint, method, data = null, token) {
+  try {
+    const response = await axios({
+      method: method,
+      url: `${PRINTIFY_API_BASE_URL}${endpoint}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      data: data
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`Error in printifyRequest for endpoint ${endpoint}:`, error.response ? error.response.data : error.message);
+    throw error;
+  }
+}
+
+// Export the printifyRequest function
+exports.printifyRequest = printifyRequest;
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+exports.handler = async (event, context) => {
+  // Set CORS headers
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
+  };
+  
+  // Handle OPTIONS request (CORS preflight)
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 204,
+      headers,
+      body: ''
+    };
+  }
+  
+  const { endpoint, ...queryParams } = event.queryStringParameters || {};
+  const method = event.httpMethod;
+  const body = event.body ? JSON.parse(event.body) : {};
+  const token = event.headers.authorization?.split(' ')[1];
+  
+  try {
+    // Generate images using Fal.ai and upload to Printify
+    if (endpoint === 'generate-image' && method === 'POST') {
+      const { prompt, numImages = 3, printAreaContexts = [], apiKey } = body;
+      
+      if (!prompt) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ success: false, message: 'Prompt is required' })
+        };
+      }
+      
+      // Use API key from request body if provided, otherwise use environment variable
+      const printifyApiKey = apiKey || process.env.PRINTIFY_API_KEY;
+      
+      if (!printifyApiKey) {
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, message: 'Printify API key not configured. Please provide a valid API key.' })
+        };
+      }
+      
+      const falApiKey = process.env.FAL_AI_API_KEY;
+      
+      if (!falApiKey) {
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, message: 'FAL.AI API key not configured' })
+        };
+      }
+      
+      try {
+        // Process the image generation directly
+        const { v4: uuidv4 } = require('uuid');
+        const fetch = require('node-fetch');
+        
+        console.log('Starting image generation process with:', {
+          promptLength: prompt?.length || 0,
+          numImages,
+          printAreaContextsCount: printAreaContexts?.length || 0,
+          apiKeyProvided: !!printifyApiKey,
+          falApiKeyProvided: !!falApiKey
+        });
+        
+        // Generate images using Fal.ai
+        const imagePromises = Array.from({ length: numImages }).map(async (_, i) => {
+          const context = printAreaContexts[i % printAreaContexts.length] || { width: 1024, height: 1024, position: 'front' };
+          const enhancedPrompt = `${prompt} for the ${context.position} of a t-shirt`;
+
+          console.log(`Generating image ${i+1}/${numImages} with prompt: "${enhancedPrompt.substring(0, 30)}..."`);
+          
+          // Generate image with Fal.ai
+          let falResponse;
+          try {
+            falResponse = await fetch('https://api.fal.ai/v1/models/fal-ai/imagen4/preview/fast', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Key ${falApiKey}`
+              },
+              body: JSON.stringify({
+                input: {
+                  prompt: enhancedPrompt,
+                  negative_prompt: 'low quality, blurry, distorted, text, watermark',
+                  width: context.width,
+                  height: context.height,
+                  num_inference_steps: 30,
+                  guidance_scale: 7.5,
+                  num_images: 1
+                }
+              })
+            });
+          } catch (falError) {
+            console.error('Error calling Fal.ai API:', falError);
+            throw new Error(`Fal.ai API error: ${falError.message}`);
+          }
+
+          if (!falResponse.ok) {
+            const errorBody = await falResponse.text();
+            console.error('Fal.ai API error:', errorBody);
+            throw new Error(`Fal.ai API error: ${falResponse.status} ${falResponse.statusText}`);
+          }
+
+          const falData = await falResponse.json();
+          
+          if (!falData.images || falData.images.length === 0) {
+            throw new Error('No images returned from Fal.ai');
+          }
+          
+          const imageUrl = falData.images[0].url;
+          const fileName = `design-${uuidv4()}.png`;
+          
+          // Convert image to base64
+          const imageResponse = await fetch(imageUrl);
+          const imageBuffer = await imageResponse.buffer();
+          const base64Data = imageBuffer.toString('base64');
+          
+          // Upload to Printify
+          const uploadResponse = await fetch('https://api.printify.com/v1/uploads/images.json', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${printifyApiKey}`
+            },
+            body: JSON.stringify({
+              file_name: fileName,
+              contents: base64Data
+            })
+          });
+
+          if (!uploadResponse.ok) {
+            const errorBody = await uploadResponse.text();
+            throw new Error(`Printify upload failed: ${uploadResponse.status} ${errorBody}`);
+          }
+
+          const printifyImage = await uploadResponse.json();
+
+          return {
+            id: printifyImage.id,
+            url: printifyImage.preview_url,
+            originalUrl: printifyImage.preview_url,
+            printAreaContext: context
+          };
+        });
+
+        const images = await Promise.all(imagePromises);
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, images })
+        };
+      } catch (error) {
+        console.error('Error generating images:', error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, message: error.message || 'An error occurred generating images' })
+        };
+      }
+    }
+    
+    // Verify Printify API token
+    if (endpoint === 'verify-token' && method === 'POST') {
+      const { token } = body;
+      
+      if (!token) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Token is required' })
+        };
+      }
+      
+      try {
+        const shops = await printifyRequest('/shops.json', 'GET', null, token);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, shops })
+        };
+      } catch (error) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ success: false, message: 'Invalid API token' })
+        };
+      }
+    }
+    
+    // Get product details
+    if (endpoint === 'get-product' && method === 'GET') {
+      const { product_id, shop_id } = queryParams;
+      
+      if (!product_id || !shop_id) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ success: false, error: 'Product ID and Shop ID are required' })
+        };
+      }
+      
+      if (!token) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ success: false, error: 'API token is required' })
+        };
+      }
+      
+      try {
+        const product = await printifyRequest(`/shops/${shop_id}/products/${product_id}.json`, 'GET', null, token);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, product })
+        };
+      } catch (error) {
+        console.error('Error fetching product:', error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, error: error.message || 'Failed to fetch product' })
+        };
+      }
+    }
+    
+    // Update product
+    if (endpoint === 'update-product' && method === 'POST') {
+      const { product_id, shop_id, ...productData } = body;
+      
+      if (!product_id || !shop_id) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ success: false, error: 'Product ID and Shop ID are required' })
+        };
+      }
+      
+      if (!token) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ success: false, error: 'API token is required' })
+        };
+      }
+      
+      try {
+        // Format the product data for the Printify API
+        const updateData = {
+          title: productData.title,
+          description: productData.description,
+          blueprint_id: parseInt(productData.blueprint_id, 10),
+          print_provider_id: parseInt(productData.print_provider_id, 10),
+          variants: productData.variants
+        };
+        
+        // Include print_areas if provided
+        if (productData.print_areas) {
+          updateData.print_areas = productData.print_areas;
+        }
+        
+        const updatedProduct = await printifyRequest(`/shops/${shop_id}/products/${product_id}.json`, 'PUT', updateData, token);
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, product: updatedProduct })
+        };
+      } catch (error) {
+        console.error('Error updating product:', error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, error: error.message || 'Failed to update product' })
+        };
+      }
+    }
+    
+    // Get shop blueprints (product types)
+    if (endpoint === 'get-blueprints' && method === 'GET') {
+      const { shopId } = queryParams;
+      
+      if (!token) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ success: false, error: 'API token is required' })
+        };
+      }
+      
+      try {
+        const blueprints = await printifyRequest('/catalog/blueprints.json', 'GET', null, token);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, blueprints })
+        };
+      } catch (error) {
+        console.error('Error fetching blueprints:', error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, error: error.message || 'Failed to fetch blueprints' })
+        };
+      }
+    }
+    
+    // Get blueprint details (NEW ENDPOINT)
+    if (endpoint === 'get-blueprint' && method === 'GET') {
+      const { blueprintId } = queryParams;
+      
+      if (!blueprintId) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ success: false, error: 'Blueprint ID is required' })
+        };
+      }
+      
+      if (!token) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ success: false, error: 'API token is required' })
+        };
+      }
+      
+      try {
+        console.log(`Fetching blueprint details for ID: ${blueprintId}`);
+        const blueprint = await printifyRequest(`/catalog/blueprints/${blueprintId}.json`, 'GET', null, token);
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, blueprint })
+        };
+      } catch (error) {
+        console.error('Error fetching blueprint:', error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, error: error.message || 'Failed to fetch blueprint' })
+        };
+      }
+    }
+    
+    // Get print providers for a blueprint
+    if (endpoint === 'get-print-providers' && method === 'GET') {
+      const { blueprintId } = queryParams;
+      
+      if (!blueprintId) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ success: false, error: 'Blueprint ID is required' })
+        };
+      }
+      
+      if (!token) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ success: false, error: 'API token is required' })
+        };
+      }
+      
+      try {
+        const providers = await printifyRequest(`/catalog/blueprints/${blueprintId}/print_providers.json`, 'GET', null, token);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, providers })
+        };
+      } catch (error) {
+        console.error('Error fetching print providers:', error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, error: error.message || 'Failed to fetch print providers' })
+        };
+      }
+    }
+    
+    // Get print provider variants
+    if (endpoint === 'get-variants' && method === 'GET') {
+      const { blueprintId, providerId } = queryParams;
+      
+      if (!blueprintId || !providerId) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ success: false, error: 'Blueprint ID and Provider ID are required' })
+        };
+      }
+      
+      if (!token) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ success: false, error: 'API token is required' })
+        };
+      }
+      
+      try {
+        const variants = await printifyRequest(`/catalog/blueprints/${blueprintId}/print_providers/${providerId}/variants.json`, 'GET', null, token);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, variants })
+        };
+      } catch (error) {
+        console.error('Error fetching variants:', error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, error: error.message || 'Failed to fetch variants' })
+        };
+      }
+    }
+    
+    // Create a new product
+    if (endpoint === 'create-product' && method === 'POST') {
+      const { shop_id, ...productData } = body;
+      
+      if (!shop_id) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ success: false, error: 'Shop ID is required' })
+        };
+      }
+      
+      if (!token) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ success: false, error: 'API token is required' })
+        };
+      }
+      
+      try {
+        const product = await printifyRequest(`/shops/${shop_id}/products.json`, 'POST', productData, token);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, product })
+        };
+      } catch (error) {
+        console.error('Error creating product:', error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, error: error.message || 'Failed to create product' })
+        };
+      }
+    }
+    
+    // Publish a product
+    if (endpoint === 'publish-product' && method === 'POST') {
+      const { product_id, shop_id } = body;
+      
+      if (!product_id || !shop_id) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ success: false, error: 'Product ID and Shop ID are required' })
+        };
+      }
+      
+      if (!token) {
+        return {
+          statusCode: 401,
+          headers,
+          body: JSON.stringify({ success: false, error: 'API token is required' })
+        };
+      }
+      
+      try {
+        const result = await printifyRequest(`/shops/${shop_id}/products/${product_id}/publish.json`, 'POST', {}, token);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, publish: result })
+        };
+      } catch (error) {
+        console.error('Error publishing product:', error);
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({ success: false, error: error.message || 'Failed to publish product' })
+        };
+      }
+    }
+    
+    // Default response for unknown endpoints
+    return {
+      statusCode: 404,
+      headers,
+      body: JSON.stringify({ success: false, error: `Endpoint '${endpoint}' not found` })
+    };
+    
+  } catch (error) {
+    console.error('Error processing request:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Internal server error', details: error.message })
+    };
+  }
+};

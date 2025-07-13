@@ -1,20 +1,33 @@
 [build]
-  command = "npm run build"
+  command = "npm install"
   publish = "public"
-  functions = "functions"
+  functions = "netlify/functions"
 
 [dev]
-  command = "npm run dev"
-  port = 3000
+  port = 8888
+  targetPort = 3001
 
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["express", "serverless-http", "axios", "cors", "body-parser", "node-fetch", "uuid"]
+
+# API redirect
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api"
+  status = 200
+
+# Printify proxy redirect
+[[redirects]]
+  from = "/printify-proxy/*"
+  to = "/.netlify/functions/printify-proxy"
+  status = 200
+
+# SPA redirect
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = false
-
-[functions]
-  node_bundler = "esbuild"
 
 [build.environment]
   NODE_VERSION = "18"

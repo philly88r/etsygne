@@ -5,19 +5,114 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Printify Design Generator</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <style>
+    .design-gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    
+    .design-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: transform 0.2s;
+      cursor: pointer;
+    }
+    
+    .design-card:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .design-card img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+    }
+    
+    .design-card.selected {
+      border-color: #0d6efd;
+      border-width: 3px;
+    }
+    
+    .print-area-item {
+      transition: all 0.2s;
+    }
+    
+    .print-area-item:hover {
+      background-color: #f8f9fa;
+    }
+    
+    .print-area-item.border-primary {
+      background-color: #e7f3ff;
+    }
+    
+    /* Design Gallery Styles */
+    #designGallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 15px;
+    }
+    
+    .api-key-section {
+      min-width: 300px;
+    }
+    
+    .design-dependent {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    
+    .design-dependent:not(.disabled) {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    
+    .selection-indicator .badge {
+      font-size: 0.7rem;
+    }
+    
+    .design-indicator img {
+      max-width: 60px;
+      max-height: 60px;
+    }
+    
+    .variant-item {
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .variant-price {
+      width: 100px;
+    }
+    
+    #generationStatus .alert {
+      margin-bottom: 0;
+    }
+    
+    .spinner-border-sm {
+      width: 1rem;
+      height: 1rem;
+    }
+  </style>
 </head>
 <body>
   <div class="container-fluid">
     <header class="py-3 mb-4 border-bottom">
-      <div class="container d-flex flex-wrap justify-content-between">
+      <div class="container d-flex flex-wrap justify-content-between align-items-center">
         <a href="/" class="d-flex align-items-center mb-3 mb-lg-0 me-lg-auto text-dark text-decoration-none">
+          <i class="bi bi-palette2 me-2 fs-4"></i>
           <span class="fs-4">Printify Design Generator</span>
         </a>
         <div class="api-key-section">
           <div class="input-group" id="apiKeyInputGroup">
             <input type="password" class="form-control" id="printifyApiKey" placeholder="Enter Printify API Key">
-            <button class="btn btn-primary" id="verifyApiKey">Verify</button>
+            <button class="btn btn-primary" id="verifyApiKey" type="button">
+              <i class="bi bi-key"></i> Verify
+            </button>
           </div>
           <div id="apiKeyStatus" class="mt-2"></div>
         </div>
@@ -28,18 +123,32 @@
       <!-- Initial Setup Section -->
       <div id="setupSection" class="row mb-5">
         <div class="col-12">
-          <div class="card">
-            <div class="card-header">
-              <h5>Getting Started</h5>
+          <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+              <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Getting Started</h5>
             </div>
             <div class="card-body">
-              <p>Welcome to the Printify Design Generator! This tool helps you create designs with Google Imagen 4 and add them to your Printify products.</p>
-              <p>To get started:</p>
-              <ol>
-                <li>Enter your Printify API key in the top right corner</li>
-                <li>Select a shop from the dropdown after verification</li>
-                <li>Generate designs or browse your existing products</li>
-              </ol>
+              <p class="mb-3">Welcome to the Printify Design Generator! This tool helps you create designs with AI and add them to your Printify products.</p>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-primary rounded-pill me-2">1</span>
+                    <span>Enter your Printify API key above</span>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-primary rounded-pill me-2">2</span>
+                    <span>Select a shop from the dropdown</span>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-primary rounded-pill me-2">3</span>
+                    <span>Generate designs and create products</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -48,14 +157,56 @@
       <!-- Shop Selection -->
       <div id="shopSelectionSection" class="row mb-5" style="display: none;">
         <div class="col-12">
-          <div class="card">
-            <div class="card-header">
-              <h5>Select Shop</h5>
+          <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+              <h5 class="mb-0"><i class="bi bi-shop me-2"></i>Select Shop</h5>
             </div>
             <div class="card-body">
-              <select class="form-select" id="shopSelect">
-                <option selected disabled>Choose a shop...</option>
-              </select>
+              <div class="row align-items-center">
+                <div class="col-md-8">
+                  <select class="form-select" id="shopSelect">
+                    <option selected disabled>Choose a shop...</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <div class="text-muted small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Select the shop where you want to create products
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Design Section (shown after API key verification) -->
+      <div id="designSection" class="row mb-5" style="display: none;">
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header bg-info text-white">
+              <h5 class="mb-0"><i class="bi bi-palette me-2"></i>Quick Design Generation</h5>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-8">
+                  <div class="input-group">
+                    <input type="text" class="form-control" id="designPrompt" placeholder="Describe the design you want to generate (e.g., 'A cute cartoon cat with sunglasses')">
+                    <button class="btn btn-primary design-dependent" id="generateDesignBtn" type="button">
+                      <i class="bi bi-magic"></i> Generate
+                    </button>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="text-muted small">
+                    <i class="bi bi-lightbulb me-1"></i>
+                    Be specific about colors, style, and content for best results
+                  </div>
+                </div>
+              </div>
+              <div id="generationStatus" class="mt-3"></div>
+              <!-- Design gallery will be dynamically inserted here -->
+              <div id="designGallery" class="design-gallery"></div>
             </div>
           </div>
         </div>
@@ -66,141 +217,259 @@
         <div class="col-12">
           <ul class="nav nav-tabs" id="mainTabs" role="tablist">
             <li class="nav-item" role="presentation">
-              <button class="nav-link active" id="generate-tab" data-bs-toggle="tab" data-bs-target="#generate" type="button" role="tab">Generate Design</button>
+              <button class="nav-link active" id="products-tab" data-bs-toggle="tab" data-bs-target="#products" type="button" role="tab" aria-controls="products" aria-selected="true">
+                <i class="bi bi-grid me-1"></i>My Products
+              </button>
             </li>
             <li class="nav-item" role="presentation">
-              <button class="nav-link" id="products-tab" data-bs-toggle="tab" data-bs-target="#products" type="button" role="tab">My Products</button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="create-tab" data-bs-toggle="tab" data-bs-target="#create" type="button" role="tab">Create Product</button>
+              <button class="nav-link" id="create-tab" data-bs-toggle="tab" data-bs-target="#create" type="button" role="tab" aria-controls="create" aria-selected="false">
+                <i class="bi bi-plus-circle me-1"></i>Create Product
+              </button>
             </li>
           </ul>
           
-          <div class="tab-content p-3 border border-top-0 rounded-bottom" id="mainTabsContent">
-            <!-- Generate Design Tab -->
-            <div class="tab-pane fade show active" id="generate" role="tabpanel">
-              <h4>Generate Design with Google Imagen 4</h4>
-              <div class="row">
-                <div class="col-md-6">
-                  <div class="mb-3">
-                    <label for="designPrompt" class="form-label">Describe your design</label>
-                    <textarea class="form-control" id="designPrompt" rows="4" placeholder="Describe the design you want to generate..."></textarea>
-                  </div>
-                  <button class="btn btn-primary" id="generateDesignBtn">Generate Design</button>
-                  <div class="mt-3" id="generationStatus"></div>
-                </div>
-                <div class="col-md-6">
-                  <div class="card">
-                    <div class="card-header">
-                      <h5>Design Tips</h5>
-                    </div>
-                    <div class="card-body">
-                      <ul>
-                        <li>Be specific about colors, style, and composition</li>
-                        <li>Mention "high resolution" for better quality</li>
-                        <li>Specify "transparent background" if needed</li>
-                        <li>Include details like "centered composition" or "minimalist design"</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
+          <div class="tab-content p-4 border border-top-0 rounded-bottom shadow-sm" id="mainTabsContent">
+            <!-- My Products Tab -->
+            <div class="tab-pane fade show active" id="products" role="tabpanel" aria-labelledby="products-tab">
+              <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4><i class="bi bi-collection me-2"></i>My Products</h4>
+                <button class="btn btn-primary" id="refreshProductsBtn">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Refresh Products
+                </button>
               </div>
               
-              <div class="mt-4">
-                <h5>Generated Designs</h5>
-                <div class="row" id="generatedDesigns"></div>
-              </div>
-            </div>
-            
-            <!-- My Products Tab -->
-            <div class="tab-pane fade" id="products" role="tabpanel">
-              <h4>My Products</h4>
-              <div class="mb-3">
-                <button class="btn btn-primary" id="refreshProductsBtn">Refresh Products</button>
-              </div>
-              <div id="productsLoading" class="text-center" style="display: none;">
-                <div class="spinner-border" role="status">
+              <div id="productsLoading" class="text-center py-5" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
                   <span class="visually-hidden">Loading...</span>
                 </div>
+                <p class="mt-3 text-muted">Loading your products...</p>
               </div>
+              
               <div class="row" id="productsList"></div>
             </div>
             
             <!-- Create Product Tab -->
-            <div class="tab-pane fade" id="create" role="tabpanel">
-              <h4>Create New Product</h4>
+            <div class="tab-pane fade" id="create" role="tabpanel" aria-labelledby="create-tab">
+              <h4><i class="bi bi-plus-circle me-2"></i>Create New Product</h4>
               
               <div class="row">
-                <div class="col-md-6">
+                <div class="col-lg-8">
                   <!-- Product Creation Form -->
-                  <form id="createProductForm">
-                    <div class="mb-3">
-                      <label for="productTitle" class="form-label">Product Title</label>
-                      <input type="text" class="form-control" id="productTitle" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                      <label for="productDescription" class="form-label">Description</label>
-                      <textarea class="form-control" id="productDescription" rows="3" required></textarea>
-                    </div>
-                    
-                    <div class="mb-3">
-                      <label for="blueprintSelect" class="form-label">Product Type</label>
-                      <select class="form-select" id="blueprintSelect" required>
-                        <option selected disabled value="">Choose a product type...</option>
-                      </select>
-                      <div class="mt-2" id="blueprintLoading" style="display: none;">
-                        <div class="spinner-border spinner-border-sm" role="status">
-                          <span class="visually-hidden">Loading...</span>
+                  <form id="createProductForm" class="needs-validation" novalidate>
+                    <!-- Product Details -->
+                    <div class="card mb-4">
+                      <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Product Details</h6>
+                      </div>
+                      <div class="card-body">
+                        <div class="mb-3">
+                          <label for="productTitle" class="form-label">Product Title</label>
+                          <input type="text" class="form-control" id="productTitle" placeholder="Enter product title (optional)">
+                          <div class="form-text">Leave blank to use Printify default title</div>
                         </div>
-                        <span class="ms-2">Loading product types...</span>
-                      </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                      <label for="providerSelect" class="form-label">Print Provider</label>
-                      <select class="form-select" id="providerSelect" disabled required>
-                        <option selected disabled value="">Select product type first...</option>
-                      </select>
-                      <div class="mt-2" id="providerLoading" style="display: none;">
-                        <div class="spinner-border spinner-border-sm" role="status">
-                          <span class="visually-hidden">Loading...</span>
+                        
+                        <div class="mb-3">
+                          <label for="productDescription" class="form-label">Description</label>
+                          <textarea class="form-control" id="productDescription" rows="3" placeholder="Enter product description (optional)"></textarea>
+                          <div class="form-text">Leave blank to use Printify default description</div>
                         </div>
-                        <span class="ms-2">Loading providers...</span>
-                      </div>
-                    </div>
-                    
-                    <div id="variantsSection" class="mb-3">
-                      <label class="form-label">Variants</label>
-                      <div id="variantsList" class="border p-3 rounded">
-                        <p class="text-muted">Select a product type and print provider to see available variants</p>
-                      </div>
-                      <div class="mt-2" id="variantsLoading" style="display: none;">
-                        <div class="spinner-border spinner-border-sm" role="status">
-                          <span class="visually-hidden">Loading...</span>
+                        <div class="mb-3">
+                          <label for="etsyShippingTemplateId" class="form-label">Etsy Shipping Template ID</label>
+                          <input type="text" class="form-control" id="etsyShippingTemplateId" placeholder="Enter the numeric ID from your Etsy shipping profile">
                         </div>
-                        <span class="ms-2">Loading variants...</span>
+                      </div>
+                    </div>
+
+                    <!-- Product Configuration -->
+                    <div class="card mb-4">
+                      <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-gear me-2"></i>Product Configuration</h6>
+                      </div>
+                      <div class="card-body">
+                        <div class="mb-3">
+                          <label for="blueprintSelect" class="form-label">Product Type *</label>
+                          <select class="form-select" id="blueprintSelect" required>
+                            <option selected disabled value="">Choose a product type...</option>
+                          </select>
+                          <div class="invalid-feedback">Please select a product type.</div>
+                          <div class="mt-2" id="blueprintLoading" style="display: none;">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                              <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span class="ms-2 small text-muted">Loading product types...</span>
+                          </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                          <label for="providerSelect" class="form-label">Print Provider *</label>
+                          <select class="form-select" id="providerSelect" disabled required>
+                            <option selected disabled value="">Select product type first...</option>
+                          </select>
+                          <div class="invalid-feedback">Please select a print provider.</div>
+                          <div class="mt-2" id="providerLoading" style="display: none;">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                              <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <span class="ms-2 small text-muted">Loading providers...</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Variants Section -->
+                    <div class="card mb-4" id="variantsSection">
+                      <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-tags me-2"></i>Product Variants & Pricing</h6>
+                      </div>
+                      <div class="card-body">
+                        <div id="variantsList" class="border rounded p-3 bg-light">
+                          <p class="text-muted mb-0">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Select a product type and print provider to see available variants
+                          </p>
+                        </div>
+                        <div class="mt-2" id="variantsLoading" style="display: none;">
+                          <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                          </div>
+                          <span class="ms-2 small text-muted">Loading variants...</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Print Areas Section -->
+                    <div class="card mb-4" id="printAreasSection">
+                      <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-printer me-2"></i>Print Areas & Design Assignment</h6>
+                      </div>
+                      <div class="card-body">
+                        <p class="text-muted mb-3">
+                          <i class="bi bi-info-circle me-1"></i>
+                          Select a print area below, then generate and assign designs
+                        </p>
+                        <div id="printAreasList" class="border rounded p-3 bg-light">
+                          <p class="text-muted mb-0">Select a product type to see available print areas</p>
+                        </div>
+                        
+                        <!-- Design Generation Interface for Selected Print Area -->
+                        <div id="designGenContainer" class="mt-4 border rounded p-4 bg-light" style="display: none;">
+                          <!-- Content will be dynamically generated when a print area is selected -->
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Design Gallery Section -->
+                    <div class="card mb-4" id="designGallerySection" style="display: none;">
+                      <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-images me-2"></i>Generated Designs</h6>
+                      </div>
+                      <div class="card-body">
+                        <p class="text-muted mb-3">
+                          <i class="bi bi-info-circle me-1"></i>
+                          Click on a design to select it, then assign it to a print area
+                        </p>
+                        <div id="designGallery" class="row row-cols-2 row-cols-md-3 g-3">
+                          <!-- Generated designs will appear here -->
+                        </div>
+                        <div class="mt-3">
+                          <button id="assignDesignBtn" class="btn btn-primary" disabled>
+                            <i class="bi bi-link me-1"></i>Assign Selected Design
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Product Preview -->
+                    <div class="card mb-4" id="productPreview">
+                      <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-eye me-2"></i>Product Preview</h6>
+                      </div>
+                      <div class="card-body text-center" id="productPreviewContainer">
+                        <div class="text-muted">
+                          <i class="bi bi-image fs-1 d-block mb-2"></i>
+                          <p>Assign designs to print areas to see a preview</p>
+                        </div>
                       </div>
                     </div>
                     
-                    <div id="printAreasSection" class="mb-3">
-                      <label class="form-label">Print Areas</label>
-                      <div id="printAreasList" class="border p-3 rounded">
-                        <p class="text-muted">Select a product type to see available print areas</p>
-                      </div>
+                    <!-- Submit Button -->
+                    <div class="d-grid">
+                      <button type="submit" class="btn btn-primary btn-lg" id="createProductBtn" disabled>
+                        <i class="bi bi-plus-circle me-2"></i>Assign designs first
+                      </button>
                     </div>
-                    
-                    <button type="submit" class="btn btn-primary" id="createProductBtn">Create Product</button>
                   </form>
                 </div>
                 
-                <div class="col-md-6">
-                  <div class="card">
-                    <div class="card-header">
-                      <h5>Selected Design</h5>
+                <div class="col-lg-4">
+                  <!-- Instructions Card -->
+                  <div class="card mb-4 sticky-top">
+                    <div class="card-header bg-light">
+                      <h6 class="mb-0"><i class="bi bi-question-circle me-2"></i>How It Works</h6>
                     </div>
-                    <div class="card-body text-center" id="selectedDesignContainer">
-                      <p class="text-muted">No design selected. Generate or select a design from the Generate Design tab.</p>
+                    <div class="card-body">
+                      <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-primary rounded-pill me-3 mt-1">1</span>
+                        <div>
+                          <strong>Select Product Type</strong>
+                          <p class="small text-muted mb-0">Choose what you want to create (t-shirt, mug, etc.)</p>
+                        </div>
+                      </div>
+                      <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-primary rounded-pill me-3 mt-1">2</span>
+                        <div>
+                          <strong>Choose Print Provider</strong>
+                          <p class="small text-muted mb-0">Select who will print your product</p>
+                        </div>
+                      </div>
+                      <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-primary rounded-pill me-3 mt-1">3</span>
+                        <div>
+                          <strong>Generate Designs</strong>
+                          <p class="small text-muted mb-0">Click on print areas and create AI designs</p>
+                        </div>
+                      </div>
+                      <div class="d-flex align-items-start mb-3">
+                        <span class="badge bg-primary rounded-pill me-3 mt-1">4</span>
+                        <div>
+                          <strong>Set Pricing</strong>
+                          <p class="small text-muted mb-0">Configure variants and prices</p>
+                        </div>
+                      </div>
+                      <div class="d-flex align-items-start">
+                        <span class="badge bg-primary rounded-pill me-3 mt-1">5</span>
+                        <div>
+                          <strong>Create & Publish</strong>
+                          <p class="small text-muted mb-0">Launch your product to your store</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Tips Card -->
+                  <div class="card">
+                    <div class="card-header bg-light">
+                      <h6 class="mb-0"><i class="bi bi-lightbulb me-2"></i>Design Tips</h6>
+                    </div>
+                    <div class="card-body">
+                      <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                          <i class="bi bi-check-circle text-success me-2"></i>
+                          <small>Be specific about colors and style</small>
+                        </li>
+                        <li class="mb-2">
+                          <i class="bi bi-check-circle text-success me-2"></i>
+                          <small>Consider the product type in your prompt</small>
+                        </li>
+                        <li class="mb-2">
+                          <i class="bi bi-check-circle text-success me-2"></i>
+                          <small>Simple designs often work better</small>
+                        </li>
+                        <li class="mb-0">
+                          <i class="bi bi-check-circle text-success me-2"></i>
+                          <small>Generate multiple options to choose from</small>
+                        </li>
+                      </ul>
                     </div>
                   </div>
                 </div>
@@ -211,47 +480,331 @@
       </div>
     </main>
 
-    <!-- Design Preview Modal -->
-    <div class="modal fade" id="designPreviewModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-lg">
+    <!-- Print Area Selection Modal -->
+    <div class="modal fade" id="printAreaSelectionModal" tabindex="-1" aria-labelledby="printAreaSelectionModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">Design Preview</h5>
+            <h5 class="modal-title" id="printAreaSelectionModalLabel">Select a Print Area</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <div class="modal-body text-center">
-            <img id="previewImage" src="" class="img-fluid" alt="Design Preview">
+          <div class="modal-body" id="modalPrintAreasList">
+            <!-- Print areas will be dynamically inserted here -->
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="button" class="btn btn-primary" id="useThisDesignBtn">Use This Design</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design Preview Modal -->
+    <div class="modal fade" id="designPreviewModal" tabindex="-1" aria-labelledby="designPreviewModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="designPreviewModalLabel">
+              <i class="bi bi-eye me-2"></i>Design Preview
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-center">
+            <img id="previewImage" src="" class="img-fluid rounded shadow" alt="Design Preview" style="max-height: 500px;">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              <i class="bi bi-x-circle me-1"></i>Close
+            </button>
+            <button type="button" class="btn btn-primary" id="useThisDesignBtn">
+              <i class="bi bi-check-circle me-1"></i>Use This Design
+            </button>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Product Created Modal -->
-    <div class="modal fade" id="productCreatedModal" tabindex="-1" aria-hidden="true">
+    <div class="modal fade" id="productCreatedModal" tabindex="-1" aria-labelledby="productCreatedModalLabel" aria-hidden="true">
       <div class="modal-dialog">
         <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Product Created</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title" id="productCreatedModalLabel">
+              <i class="bi bi-check-circle me-2"></i>Product Created Successfully!
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <p>Your product has been created successfully!</p>
-            <p>Would you like to publish it now?</p>
+            <div class="text-center mb-3">
+              <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+            </div>
+            <p class="text-center mb-3">Your product has been created successfully in Printify!</p>
+            <p class="text-center text-muted">Would you like to publish it to your store now?</p>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Later</button>
-            <button type="button" class="btn btn-primary" id="publishProductBtn">Publish Now</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              <i class="bi bi-clock me-1"></i>Publish Later
+            </button>
+            <button type="button" class="btn btn-primary" id="publishProductBtn">
+              <i class="bi bi-rocket me-1"></i>Publish Now
+            </button>
           </div>
         </div>
       </div>
     </div>
-  </div>
+    
+    <!-- Design Selection Modal -->
+    <div class="modal fade" id="designSelectionModal" tabindex="-1" aria-labelledby="designSelectionModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="designSelectionModalLabel">
+              <i class="bi bi-palette me-2"></i>Select or Generate Design
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-4">
+              <label for="modalDesignPrompt" class="form-label">Design Description</label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="modalDesignPrompt" placeholder="Describe the design you want to generate">
+                <button class="btn btn-primary" id="modalGenerateDesignBtn" type="button">
+                  <i class="bi bi-magic"></i> Generate
+                </button>
+              </div>
+              <div class="form-text">Be specific about colors, style, and content for best results</div>
+            </div>
+            
+            <div id="modalGenerationStatus" class="mb-3"></div>
+            
+            <div id="designSelectionContainer" class="row"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              <i class="bi bi-x-circle me-1"></i>Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="app.js"></script>
+    <!-- Print Area Selection Modal -->
+    <div class="modal fade" id="printAreaSelectionModal" tabindex="-1" aria-labelledby="printAreaSelectionModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="printAreaSelectionModalLabel">
+              <i class="bi bi-grid me-2"></i>Select Print Area
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>Choose which print area to assign this design to:</p>
+            <div id="printAreaSelectionContainer" class="row"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              <i class="bi bi-x-circle me-1"></i>Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Publish Success Modal -->
+    <div class="modal fade" id="publishSuccessModal" tabindex="-1" aria-labelledby="publishSuccessModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title" id="publishSuccessModalLabel">
+              <i class="bi bi-check-circle me-2"></i>Designs Published Successfully
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="text-center mb-4">
+              <div class="display-1 text-success mb-3">
+                <i class="bi bi-check-circle-fill"></i>
+              </div>
+              <h4>Your designs have been published!</h4>
+              <p class="text-muted">Your product with the assigned designs has been successfully published to your store.</p>
+            </div>
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle me-2"></i>
+              <strong>What's next?</strong> You can now view your product in your store dashboard or create another product.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              <i class="bi bi-x-circle me-2"></i>Close
+            </button>
+            <button type="button" class="btn btn-primary" id="createAnotherProductBtn" data-bs-dismiss="modal">
+              <i class="bi bi-plus-circle me-2"></i>Create Another Product
+            </button>
+            <a href="#" class="btn btn-success" id="viewProductBtn">
+              <i class="bi bi-eye me-2"></i>View in Store
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Loading Overlay (for full page loading states) -->
+    <div id="loadingOverlay" class="position-fixed top-0 start-0 w-100 h-100" style="background: rgba(0,0,0,0.5); z-index: 9999; display: none;">
+      <div class="d-flex justify-content-center align-items-center h-100">
+        <div class="text-center text-white">
+          <div class="spinner-border" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <h5 id="loadingText" class="mt-3 mb-0">Processing...</h5>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="local-api-helper.js?v=2.0"></script>
+    <script src="app.js?v=2.0"></script>
+    <script src="js/design-gallery.js?v=2.0"></script>
+    <script src="js/modal-functions.js?v=2.0"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Inline script loaded. Attaching design gallery listener.');
+      const gallery = document.getElementById('generatedDesigns');
+      if (gallery) {
+        gallery.addEventListener('click', handleDesignSelection);
+      } else {
+        console.log('Generated designs container not found on page load.');
+      }
+    });
+
+    function displayGeneratedDesigns(designs) {
+      const gallery = document.getElementById('generatedDesigns');
+      if (!gallery) return;
+      gallery.innerHTML = '';
+      if (!designs || designs.length === 0) {
+        gallery.innerHTML = '<div class="col-12"><div class="alert alert-info">No designs generated.</div></div>';
+        return;
+      }
+      designs.forEach(design => {
+        const col = document.createElement('div');
+        col.className = 'col-md-3 mb-4';
+        const card = document.createElement('div');
+        card.className = 'card design-card h-100';
+        card.dataset.designUrl = design.url;
+        card.dataset.originalUrl = design.original_url || design.url;
+        card.dataset.designId = design.id;
+        card.innerHTML = `
+          <img src="${design.url}" class="card-img-top" alt="Generated Design">
+          <div class="card-body text-center">
+            <button type="button" class="btn btn-sm btn-primary select-design-btn">Select</button>
+          </div>`;
+        col.appendChild(card);
+        gallery.appendChild(col);
+      });
+    }
+
+    function handleDesignSelection(event) {
+      if (event.target.classList.contains('select-design-btn')) {
+        event.preventDefault();
+        // Only stop propagation for form elements
+        if (event.target.form) {
+          event.stopPropagation();
+        }
+        
+        console.log('Design button clicked in index.html');
+        const card = event.target.closest('.design-card');
+        if (!card) return;
+        document.querySelectorAll('.design-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        selectedDesignUrl = card.dataset.designUrl;
+        selectedDesignOriginalUrl = card.dataset.originalUrl;
+        selectedDesignId = card.dataset.designId;
+        console.log('Selected design:', { url: selectedDesignUrl, originalUrl: selectedDesignOriginalUrl, id: selectedDesignId });
+        
+        // If print areas exist, try to assign to the first one
+        const printAreas = document.querySelectorAll('.print-area-item');
+        console.log('Found print area items in index.html:', printAreas.length);
+        
+        if (printAreas && printAreas.length > 0) {
+          const firstArea = printAreas[0];
+          const areaId = firstArea.getAttribute('data-print-area-id');
+          console.log('Found print area with ID:', areaId);
+          
+          // Use the title from the heading if available
+          const areaHeading = firstArea.querySelector('h6');
+          const position = areaHeading ? areaHeading.textContent.toLowerCase() : 'front';
+          
+          console.log(`Auto-selecting print area: ${areaId}, position: ${position}`);
+          selectedPrintAreaId = areaId;
+          selectedPrintAreaPosition = position;
+          
+          // If assignDesignToPrintArea function exists, call it
+          if (typeof assignDesignToPrintArea === 'function') {
+            assignDesignToPrintArea(areaId, position, firstArea, event);
+          }
+        }
+        
+        updateProductPreview();
+        if (typeof saveStateToStorage === 'function') {
+          saveStateToStorage();
+        }
+        updateCreateProductButton();
+      }
+    }
+
+    function updateProductPreview() {
+      const previewContainer = document.getElementById('productPreviewContainer');
+      if (!previewContainer) return;
+      if (selectedDesignUrl) {
+        previewContainer.innerHTML = `
+          <div class="text-center">
+            <img src="${selectedDesignUrl}" class="img-fluid rounded shadow" style="max-height: 200px;" alt="Product Preview">
+            <p class="mt-2 text-muted">Preview of selected design</p>
+          </div>`;
+      } else {
+        previewContainer.innerHTML = `
+          <div class="text-muted">
+            <i class="bi bi-image fs-1 d-block mb-2"></i>
+            <p>Assign designs to print areas to see a preview</p>
+          </div>`;
+      }
+    }
+
+    function updateCreateProductButton() {
+      const createBtn = document.getElementById('createProductBtn');
+      if (!createBtn) return;
+      const hasBlueprint = document.getElementById('blueprintSelect')?.value;
+      const hasProvider = document.getElementById('providerSelect')?.value;
+      const hasDesign = selectedDesignUrl;
+      if (hasBlueprint && hasProvider && hasDesign) {
+        createBtn.disabled = false;
+      } else {
+        createBtn.disabled = true;
+      }
+    }
+  </script>
+  
+  <!-- Print Area Selection Modal -->
+  <div class="modal fade" id="printAreaSelectionModal" tabindex="-1" aria-labelledby="printAreaSelectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="printAreaSelectionModalLabel">Select Print Area</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>Choose a print area for this design:</p>
+          <div id="modalPrintAreasList" class="list-group"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Bootstrap JS (required for modal functionality) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-7zyBbs6k8ZZrVSu2VvulaHYodEc/WWEDuJeayQMZT6ZX0hgqP/d9vywgq6Z9Yuqb" crossorigin="anonymous"></script>
 </body>
 </html>

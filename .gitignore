@@ -2,6 +2,7 @@
 /node_modules
 /.pnp
 .pnp.js
+/netlify/functions/node_modules
 
 # testing
 /coverage
@@ -23,4 +24,7 @@ yarn-error.log*
 
 # Generated images
 /public/generated-images/*
-!public/generated-images/.gitkeep
+!/public/generated-images/.gitkeep
+
+# Local Netlify folder
+.netlify

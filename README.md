@@ -1,10 +1,11 @@
 # Printify Design Generator
 
-A web application that integrates with the Printify API and Google Imagen 4 to create and manage product designs.
+A web application that integrates with the Printify API and FAL.ai to create and manage product designs with multi-design generation capabilities.
 
 ## Features
 
-- Generate designs using Google Imagen 4 AI
+- Generate multiple designs using FAL.ai's Stable Diffusion XL
+- Assign different designs to different print areas
 - Upload designs to Printify
 - Browse available product types (blueprints), print providers, and variants
 - Create products with your designs
@@ -15,7 +16,7 @@ A web application that integrates with the Printify API and Google Imagen 4 to c
 
 - Node.js (v14 or higher)
 - Printify API key (from your Printify account)
-- Google API key with access to Imagen 4
+- FAL.ai API key for image generation
 
 ## Installation
 
@@ -30,7 +31,7 @@ npm install
    - Edit the `.env` file and add your API keys:
    ```
    PRINTIFY_API_KEY=your_printify_api_key_here
-   GOOGLE_API_KEY=your_google_api_key_here
+   FAL_AI_API_KEY=your_fal_ai_api_key_here
    PORT=3000
    ```
 
@@ -46,7 +47,8 @@ npm start
 3. Enter your Printify API key in the top right corner
 4. Select your shop from the dropdown
 5. Use the tabs to:
-   - Generate designs with AI
+   - Generate multiple designs with AI
+   - Assign different designs to different print areas
    - View your existing products
    - Create new products with your designs
 
@@ -66,7 +68,7 @@ npm start
 - `GET /api/catalog/blueprints/:blueprintId/print-providers/:providerId/variants` - Get variants for a blueprint and print provider
 
 ### Images
-- `POST /api/generate-image` - Generate images with Google Imagen 4
+- `POST /api/generate-image` - Generate multiple images with FAL.ai Stable Diffusion XL
 - `POST /api/upload-image` - Upload an image to Printify
 
 ## Getting API Keys
@@ -77,17 +79,18 @@ npm start
 3. Navigate to the "API" section
 4. Generate a new API key
 
-### Google API Key for Imagen 4
-1. Go to [Google AI Studio](https://makersuite.google.com/)
-2. Create a new project or use an existing one
-3. Navigate to API Keys
-4. Create a new API key with access to Imagen 4
+### FAL.ai API Key
+1. Go to [FAL.ai](https://fal.ai/)
+2. Create an account or log in
+3. Navigate to your dashboard
+4. Generate a new API key
 
 ## Troubleshooting
 
 - **API Key Issues**: Ensure your API keys are correctly entered in the `.env` file
-- **Image Generation Errors**: Check that your Google API key has access to Imagen 4
-- **Product Creation Errors**: Make sure you've selected a design, blueprint, print provider, variants, and assigned the design to at least one print area
+- **Image Generation Errors**: Check that your FAL.ai API key is valid and has sufficient credits
+- **Product Creation Errors**: Make sure you've selected designs, blueprint, print provider, variants, and assigned designs to print areas
+- **Multi-Design Issues**: Ensure you've assigned the appropriate designs to each print area before creating the product
 
 ## License
 
