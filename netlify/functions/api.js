@@ -464,16 +464,20 @@ exports.handler = async (event, context) => {
       if (!blueprintId) {
         return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'Blueprint ID is required' }) };
       }
+      
+      // Use a default provider ID if one isn't provided
+      // This ensures we can get print areas even without a specific provider
+      const defaultProviderId = '1'; // Default to the first provider
+      const effectiveProviderId = providerId || defaultProviderId;
       try {
         console.log(`Fetching blueprint details for ID: ${blueprintId}`);
         const blueprint = await printifyRequest(`/catalog/blueprints/${blueprintId}.json`, 'GET', null, token);
         
-        // Get print areas from variants if provider ID is available
+        // Get print areas from variants using the effective provider ID
         let print_areas = [];
-        if (providerId) {
-          try {
-            console.log(`Fetching variants for blueprint ID: ${blueprintId} and provider ID: ${providerId}`);
-            const variantsUrl = `/catalog/blueprints/${blueprintId}/print_providers/${providerId}/variants.json?show-out-of-stock=1`;
+        try {
+          console.log(`Fetching variants for blueprint ID: ${blueprintId} and provider ID: ${effectiveProviderId}`);
+          const variantsUrl = `/catalog/blueprints/${blueprintId}/print_providers/${effectiveProviderId}/variants.json?show-out-of-stock=1`;
             const variantsResponse = await printifyRequest(variantsUrl, 'GET', null, token);
             
             // Extract unique placeholders from variants
@@ -502,7 +506,6 @@ exports.handler = async (event, context) => {
           } catch (variantError) {
             console.warn('Failed to fetch variants for print areas:', variantError.message);
           }
-        }
         
         // Detailed logging to inspect the received blueprint data
         console.log('Received blueprint data from Printify:', JSON.stringify(blueprint, null, 2));
