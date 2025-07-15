@@ -454,7 +454,7 @@ function showDesignGenerationSection() {
     
     <div class="mb-3">
       <label for="designPrompt" class="form-label">Design Description</label>
-      <textarea id="designPrompt" class="form-control" rows="4" placeholder="Describe the design you want to generate...">${currentDesignPrompt}</textarea>
+      <textarea id="designPrompt" class="form-control" rows="4" placeholder="Describe the design you want to generate..."></textarea>
     </div>
     
     <button id="generateDesignsBtn" type="button" class="btn btn-primary btn-lg w-100" disabled>
@@ -576,16 +576,18 @@ function showDesignGenerationSection() {
   const generateBtn = document.getElementById('generateDesignsBtn');
   if (generateBtn) {
     generateBtn.addEventListener('click', function(event) {
-      // Get the current value directly from the textarea to ensure it's up to date
+      // Get the current value directly from the textarea
       const promptTextarea = document.getElementById('designPrompt');
-      if (promptTextarea) {
-        currentDesignPrompt = promptTextarea.value;
+      if (!promptTextarea) {
+        alert('Design prompt textarea not found.');
+        return;
       }
       
-      console.log('Generate button clicked with prompt:', currentDesignPrompt);
+      const designPrompt = promptTextarea.value;
+      console.log('Generate button clicked with prompt:', designPrompt);
       
       // Validate that we have both a prompt and a selected print area
-      if (!currentDesignPrompt || !currentDesignPrompt.trim()) {
+      if (!designPrompt || !designPrompt.trim()) {
         alert('Please enter a design prompt.');
         return;
       }
@@ -600,7 +602,7 @@ function showDesignGenerationSection() {
       
       // Pass the selected print area information to the generateDesigns function
       generateDesigns(
-        currentDesignPrompt.trim(), 
+        designPrompt.trim(), 
         selectedPrintAreaId, 
         selectedPrintAreaWidth, 
         selectedPrintAreaHeight, 
