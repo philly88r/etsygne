@@ -472,8 +472,20 @@ function showDesignGenerationSection() {
   
   const promptTextarea = document.getElementById('designPrompt');
   if (promptTextarea) {
+    // Set initial value from the textarea
+    currentDesignPrompt = promptTextarea.value;
+    console.log('Initial design prompt:', currentDesignPrompt);
+    
+    // Add event listener for input changes
     promptTextarea.addEventListener('input', function(e) {
       currentDesignPrompt = e.target.value;
+      console.log('Updated design prompt:', currentDesignPrompt);
+    });
+    
+    // Also add change event listener for good measure
+    promptTextarea.addEventListener('change', function(e) {
+      currentDesignPrompt = e.target.value;
+      console.log('Design prompt changed:', currentDesignPrompt);
     });
   }
   
@@ -564,6 +576,14 @@ function showDesignGenerationSection() {
   const generateBtn = document.getElementById('generateDesignsBtn');
   if (generateBtn) {
     generateBtn.addEventListener('click', function(event) {
+      // Get the current value directly from the textarea to ensure it's up to date
+      const promptTextarea = document.getElementById('designPrompt');
+      if (promptTextarea) {
+        currentDesignPrompt = promptTextarea.value;
+      }
+      
+      console.log('Generate button clicked with prompt:', currentDesignPrompt);
+      
       // Validate that we have both a prompt and a selected print area
       if (!currentDesignPrompt || !currentDesignPrompt.trim()) {
         alert('Please enter a design prompt.');
