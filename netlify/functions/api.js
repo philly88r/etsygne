@@ -125,9 +125,19 @@ exports.handler = async (event, context) => {
         // Generate images using Fal.ai
         const imagePromises = Array.from({ length: numImages }).map(async (_, i) => {
           const context = printAreaContexts[i % printAreaContexts.length] || { width: 1024, height: 1024, position: 'front' };
-          const enhancedPrompt = `${prompt} for the ${context.position} of a t-shirt`;
 
-          console.log(`Generating image ${i+1}/${numImages} with prompt: "${enhancedPrompt.substring(0, 30)}..."`);
+          // **CRITICAL FIX**: Ensure dimensions are integers before use.
+          const finalWidth = parseInt(context.width, 10);
+          const finalHeight = parseInt(context.height, 10);
+
+          if (isNaN(finalWidth) || isNaN(finalHeight)) {
+              console.error('Invalid dimensions in print area context:', context);
+              // Skip this image if dimensions are invalid
+              return null;
+          }
+
+          console.log(`Generating image ${i+1}/${numImages} with dimensions: ${finalWidth}x${finalHeight}`);
+          const enhancedPrompt = `${prompt} for the ${context.position} of a t-shirt`;
           
           // Generate image with Fal.ai with retry logic
           let falResponse;
@@ -160,8 +170,8 @@ exports.handler = async (event, context) => {
                   body: JSON.stringify({
                     prompt: enhancedPrompt,
                     negative_prompt: 'low quality, blurry, distorted, text, watermark',
-                    width: context.width,
-                    height: context.height,
+                    width: finalWidth,
+                    height: finalHeight,
                     num_inference_steps: 30,
                     guidance_scale: 7.5,
                     num_images: 1,
@@ -464,70 +474,54 @@ exports.handler = async (event, context) => {
       if (!blueprintId) {
         return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'Blueprint ID is required' }) };
       }
-      
-      // Use a default provider ID if one isn't provided
-      // This ensures we can get print areas even without a specific provider
-      const defaultProviderId = '3'; // Default to provider ID 3 which works with blueprint ID 10
+
+      const defaultProviderId = '3'; // A known working default
       const effectiveProviderId = providerId || defaultProviderId;
+
       try {
         console.log(`Fetching blueprint details for ID: ${blueprintId}`);
         const blueprint = await printifyRequest(`/catalog/blueprints/${blueprintId}.json`, 'GET', null, token);
-        
-        // Get print areas from variants using the effective provider ID
         let print_areas = [];
+
         try {
           console.log(`Fetching variants for blueprint ID: ${blueprintId} and provider ID: ${effectiveProviderId}`);
           const variantsUrl = `/catalog/blueprints/${blueprintId}/print_providers/${effectiveProviderId}/variants.json?show-out-of-stock=1`;
-            const variantsResponse = await printifyRequest(variantsUrl, 'GET', null, token);
-            
-            // Extract unique placeholders from variants
-            if (variantsResponse && Array.isArray(variantsResponse.variants)) {
-              const placeholderMap = new Map();
-              
-              variantsResponse.variants.forEach(variant => {
-                if (variant.placeholders && Array.isArray(variant.placeholders)) {
-                  variant.placeholders.forEach(placeholder => {
-                    const key = placeholder.position;
-                    if (!placeholderMap.has(key)) {
-                      placeholderMap.set(key, {
-                        id: placeholder.position,
-                        title: placeholder.position.charAt(0).toUpperCase() + placeholder.position.slice(1),
-                        width: placeholder.width,
-                        height: placeholder.height
-                      });
-                    }
-                  });
-                }
-              });
-              
-              print_areas = Array.from(placeholderMap.values());
-              console.log('Extracted print areas from variants:', print_areas);
-            }
-          } catch (variantError) {
-            console.warn('Failed to fetch variants for print areas:', variantError.message);
+          const variantsResponse = await printifyRequest(variantsUrl, 'GET', null, token);
+
+          if (variantsResponse && Array.isArray(variantsResponse.variants)) {
+            const placeholderMap = new Map();
+            variantsResponse.variants.forEach(variant => {
+              if (variant.placeholders && Array.isArray(variant.placeholders)) {
+                variant.placeholders.forEach(placeholder => {
+                  if (!placeholderMap.has(placeholder.position)) {
+                    placeholderMap.set(placeholder.position, {
+                      id: placeholder.position,
+                      title: placeholder.position.charAt(0).toUpperCase() + placeholder.position.slice(1),
+                      width: placeholder.width,
+                      height: placeholder.height
+                    });
+                  }
+                });
+              }
+            });
+            print_areas = Array.from(placeholderMap.values());
+            console.log('Extracted print areas from variants:', print_areas);
           }
-        
-        // Detailed logging to inspect the received blueprint data
-        console.log('Received blueprint data from Printify:', JSON.stringify(blueprint, null, 2));
-        console.log('Final print areas:', print_areas);
-        
-        // Include the extracted print areas in the response
-        const response = { success: true, blueprint: { ...blueprint, print_areas } };
-        return { statusCode: 200, headers, body: JSON.stringify(response) };
-      } catch (error) {
-        console.warn(`Failed to fetch single blueprint ${blueprintId}, falling back to all blueprints list.`);
-        try {
-          const allBlueprints = await printifyRequest('/catalog/blueprints.json', 'GET', null, token);
-          const blueprint = allBlueprints.find(bp => bp.id == blueprintId);
-          if (blueprint) {
-            const response = { success: true, blueprint: { ...blueprint, print_areas: blueprint.print_areas || [] } };
-            return { statusCode: 200, headers, body: JSON.stringify(response) };
-          } else {
-            return { statusCode: 404, headers, body: JSON.stringify({ success: false, error: 'Blueprint not found in fallback list' }) };
-          }
-        } catch (fallbackError) {
-          return { statusCode: 500, headers, body: JSON.stringify({ success: false, error: fallbackError.message }) };
+        } catch (variantError) {
+          console.warn(`Could not fetch variants for provider ${effectiveProviderId}, proceeding without them. Error: ${variantError.message}`);
+          // Proceed without print areas from variants if this fails
         }
+
+        // Combine with any default print areas on the blueprint itself
+        const final_print_areas = [...(blueprint.print_areas || []), ...print_areas];
+        const unique_print_areas = Array.from(new Map(final_print_areas.map(p => [p.id, p])).values());
+
+        const response = { success: true, blueprint: { ...blueprint, print_areas: unique_print_areas } };
+        return { statusCode: 200, headers, body: JSON.stringify(response) };
+
+      } catch (error) {
+        console.error(`Failed to fetch blueprint ${blueprintId}:`, error);
+        return { statusCode: 500, headers, body: JSON.stringify({ success: false, error: `Failed to fetch blueprint: ${error.message}` }) };
       }
     }
     
