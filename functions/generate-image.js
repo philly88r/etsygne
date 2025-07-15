@@ -55,8 +55,16 @@ const handler = async function(event, context) {
 
   try {
     console.log('Parsing request body...');
-    const { prompt, numImages = 3, printAreaContexts = [], apiKey = null } = JSON.parse(event.body);
-    console.log('Request parsed:', { prompt: prompt.substring(0, 30) + '...', numImages, printAreaContextsCount: printAreaContexts.length, apiKeyProvided: !!apiKey });
+    const { prompt, numImages = 3, width, height, printAreaId, printAreaContexts = [], apiKey = null } = JSON.parse(event.body);
+    console.log('Request parsed:', { 
+      prompt: prompt.substring(0, 30) + '...', 
+      numImages, 
+      width, 
+      height, 
+      printAreaId,
+      printAreaContextsCount: printAreaContexts.length, 
+      apiKeyProvided: !!apiKey 
+    });
     
     if (!prompt) {
       console.log('Error: No prompt provided');
@@ -81,7 +89,32 @@ const handler = async function(event, context) {
     }
 
     const imagePromises = Array.from({ length: numImages }).map(async (_, i) => {
-      const context = printAreaContexts[i % printAreaContexts.length] || { width: 1024, height: 1024, position: 'front' };
+      // Create a context object that prioritizes explicit width/height parameters
+      // Ensure width and height are numbers, not strings
+      const contextWidth = typeof width === 'string' ? parseInt(width) : width;
+      const contextHeight = typeof height === 'string' ? parseInt(height) : height;
+      
+      // Use the provided dimensions or fallback to context array or default
+      const context = {
+        width: contextWidth || (printAreaContexts[i % printAreaContexts.length]?.width) || 1024,
+        height: contextHeight || (printAreaContexts[i % printAreaContexts.length]?.height) || 1024,
+        position: (printAreaContexts[i % printAreaContexts.length]?.position) || 'front',
+        id: printAreaId || (printAreaContexts[i % printAreaContexts.length]?.id)
+      };
+      
+      // Convert dimensions to integers and apply reasonable constraints only if needed
+      // We want to use the exact print area dimensions when possible
+      const finalWidth = parseInt(context.width) || 1024;
+      const finalHeight = parseInt(context.height) || 1024;
+      
+      // Only constrain dimensions if they're outside the API's acceptable range
+      const apiMinDimension = 512;
+      const apiMaxDimension = 1536;
+      const constrainedWidth = finalWidth < apiMinDimension ? apiMinDimension : (finalWidth > apiMaxDimension ? apiMaxDimension : finalWidth);
+      const constrainedHeight = finalHeight < apiMinDimension ? apiMinDimension : (finalHeight > apiMaxDimension ? apiMaxDimension : finalHeight);
+      
+      console.log(`Generating image ${i+1} with dimensions: ${context.width}x${context.height}`);
+      console.log(`Original dimensions: ${finalWidth}x${finalHeight}, Constrained if needed: ${constrainedWidth}x${constrainedHeight}`);
       const enhancedPrompt = `${prompt} for the ${context.position} of a t-shirt`;
 
       // Generate image with Fal.ai
@@ -95,8 +128,9 @@ const handler = async function(event, context) {
           input: {
             prompt: enhancedPrompt,
             negative_prompt: 'low quality, blurry, distorted, text, watermark',
-            width: context.width,
-            height: context.height,
+            // Use the exact dimensions from the print area when possible, only constrain if outside API limits
+            width: constrainedWidth,
+            height: constrainedHeight,
             num_inference_steps: 30,
             guidance_scale: 7.5,
             num_images: 1
@@ -122,8 +156,16 @@ const handler = async function(event, context) {
       return {
         id: printifyImage.id,
         url: printifyImage.preview_url,
-        originalUrl: printifyImage.preview_url, // Or store the fal.ai original if needed
-        printAreaContext: context
+        originalUrl: printifyImage.preview_url,
+        name: fileName.replace('.png', ''),
+        width: finalWidth,
+        height: finalHeight,
+        printAreaContext: {
+          id: context.id,
+          width: finalWidth,
+          height: finalHeight,
+          position: context.position
+        }
       };
     });
 

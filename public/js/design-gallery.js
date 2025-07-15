@@ -1,11 +1,16 @@
-// Design Gallery Management
+// Design Gallery Management with Drag-and-Drop Functionality
 // Stores all generated designs with their metadata
 let designGallery = [];
 
-let selectedDesigns = {}; // Map of printAreaId -> designId
-// Expose the design assignments globally so other scripts (e.g., app.js) can access them
-window.selectedDesigns = selectedDesigns;
-window.assignedDesigns = selectedDesigns;
+// Design-to-print area assignments
+let designAssignments = {}; // Map of printAreaId -> designId
+
+// History for undo/redo functionality
+let assignmentHistory = [];
+let historyPosition = -1;
+
+// Expose the design assignments globally
+window.designAssignments = designAssignments;
 
 // Create the assignment modal if it doesn't exist
 function createAssignmentModal() {
@@ -191,54 +196,17 @@ function displayGeneratedDesigns(images) {
   // Get the container for the designs
   const designGalleryContainer = document.getElementById('designGalleryContainer');
   if (!designGalleryContainer) {
-    console.error('Design gallery container not found');
     return;
   }
   
-  // Clear the container
-  designGalleryContainer.innerHTML = '<h5 class="mb-3">Generated Designs</h5>';
-  
-  // Create a row for the designs
-  const designsRow = document.createElement('div');
-  designsRow.className = 'row';
-  designGalleryContainer.appendChild(designsRow);
-  
-  // Add a header
-  const galleryHeader = document.createElement('div');
-  galleryHeader.className = 'col-12 mb-3';
-  galleryHeader.innerHTML = `
-    <h4>Design Gallery</h4>
-    <p class="text-muted">Select designs to place on different print areas of your product.</p>
-  `;
-  designsRow.appendChild(galleryHeader);
-  
-  // Display each design
-  designGallery.forEach(design => {
-    // Check if this design is assigned to any print areas
-    const selectedForAreas = Object.entries(selectedDesigns)
-      .filter(([areaId, designId]) => designId === design.id)
-      .map(([areaId]) => areaId);
-    
-    const isSelected = selectedForAreas.length > 0;
-    
-    // Create a card for this design
-    const designCard = document.createElement('div');
-    designCard.className = 'col-md-3 mb-4';
-    
-    designCard.innerHTML = `
-      <div class="card h-100 ${isSelected ? 'border-success' : ''}">
-        <div class="design-image-container position-relative clickable-design" data-design-id="${design.id}" style="cursor: pointer;">
-          <img src="${design.url}" class="card-img-top design-image" alt="Generated Design">
-          ${isSelected ? `<div class="position-absolute top-0 end-0 p-2 bg-success text-white rounded-circle"><i class="bi bi-check"></i></div>` : ''}
+  // Create the design workspace layout
+  const workspaceHtml = `
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle-fill me-2"></i>
+          <strong>Drag and drop</strong> designs onto print areas to assign them. Click the <strong>Preview</strong> tab to see your product.
         </div>
-        <div class="card-body">
-          <h6 class="card-title">Design ${design.id.substring(0, 8)}...</h6>
-          <p class="card-text small">
-            ${design.printAreaContext.position} placement<br>
-            ${design.printAreaContext.width}x${design.printAreaContext.height}
-          </p>
-        </div>
-
       </div>
     `;
     

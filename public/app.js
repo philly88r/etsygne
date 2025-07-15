@@ -103,61 +103,11 @@ function showDirectPrintAreaSelection(designId) {
   directSelectionContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
+// This function is no longer needed with the drag-and-drop approach
+// Keeping it as a stub for backward compatibility
 function openPrintAreaSelectionModal(designId) {
-  console.log(`openPrintAreaSelectionModal called for design ID: ${designId}`);
-  const modalElement = document.getElementById('printAreaSelectionModal');
-  
-  if (!modalElement) {
-    console.error('Print area selection modal element not found in the DOM!');
-    return;
-  }
-
-  // Ensure we have a bootstrap modal instance to work with
-  const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-
-  modalElement.dataset.designId = designId;
-
-  const modalBody = document.getElementById('modalPrintAreasList');
-  if (!modalBody) {
-    console.error('Modal print areas list element not found');
-    return;
-  }
-
-  modalBody.innerHTML = '';
-
-  const printAreas = (window.currentBlueprintData && window.currentBlueprintData.print_areas) || [];
-  console.log('Populating modal with print areas:', printAreas);
-
-  if (printAreas.length === 0) {
-    modalBody.innerHTML = '<div class="alert alert-warning">No print areas available for this product.</div>';
-  } else {
-    printAreas.forEach(area => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
-      btn.dataset.areaId = area.id;
-      btn.innerHTML = `
-        <div>
-          <h6 class="mb-1">${area.title || 'Print Area'}</h6>
-          <small class="text-muted">${area.id}</small>
-        </div>
-        <span class="badge bg-primary rounded-pill">${area.placeholders[0]?.height || '?'}×${area.placeholders[0]?.width || '?'}</span>
-      `;
-
-      btn.addEventListener('click', () => {
-        const currentDesignId = modalElement.dataset.designId;
-        console.log(`Print area selected: ${area.id} for design: ${currentDesignId}`);
-        if (typeof window.assignDesignToPrintArea === 'function') {
-          window.assignDesignToPrintArea(currentDesignId, area.id);
-        }
-        modal.hide();
-      });
-
-      modalBody.appendChild(btn);
-    });
-  }
-
-  modal.show();
+  console.log(`openPrintAreaSelectionModal is deprecated. Using drag-and-drop instead.`);
+  // No action needed - the new drag-and-drop interface handles design assignment
 }
 
 // Handle print area selection from the modal
@@ -173,6 +123,13 @@ window.assignDesignToPrintArea = function(designId, printAreaId) {
   
   if (!designId || !printAreaId) {
     console.error('Missing design ID or print area ID');
+    return;
+  }
+  
+  // Use our drag-and-drop implementation if available
+  if (typeof window.dragDropAssignDesignToPrintArea === 'function') {
+    console.log('Using drag-drop implementation for design assignment');
+    window.dragDropAssignDesignToPrintArea(designId, printAreaId);
     return;
   }
   
@@ -429,9 +386,9 @@ function showDesignGenerationSection() {
   }
 }
 
-// Generate designs using the provided prompt
-async function generateDesigns(prompt) {
-  console.log('Generating designs with prompt:', prompt);
+// Generate designs using the provided prompt and print area information
+async function generateDesigns(prompt, printAreaId, width, height, position) {
+  console.log(`Generating designs with prompt: ${prompt} for print area ${printAreaId} (${width}x${height})`);
   const generationStatus = document.getElementById('generationStatus');
   
   if (!generationStatus) {
@@ -439,17 +396,41 @@ async function generateDesigns(prompt) {
     return;
   }
   
+  // Log the print area information
+  console.log('Print area information:', { printAreaId, width, height, position });
+  
   try {
     generationStatus.innerHTML = '<div class="alert alert-info">Generating designs, please wait...</div>';
     
-    // Get dimensions from the first print area if available, or use defaults
-    let width = 1000;
-    let height = 1000;
+    // Create an array of print area contexts with accurate dimensions
+    const printAreaContexts = [];
     
-    if (printAreas && printAreas.length > 0) {
-      width = printAreas[0].width || 1000;
-      height = printAreas[0].height || 1000;
+    // If we have specific print area information passed in, use that
+    if (printAreaId && width && height) {
+      printAreaContexts.push({
+        printAreaId: printAreaId,
+        position: position || 'front',
+        width: parseInt(width),
+        height: parseInt(height)
+      });
+      console.log('Using specific print area dimensions:', { printAreaId, width, height, position });
     }
+    // Otherwise, check if we have print areas available
+    else if (printAreas && printAreas.length > 0) {
+      // Use all available print areas with their actual dimensions
+      printAreas.forEach(area => {
+        if (area && area.id) {
+          printAreaContexts.push({
+            printAreaId: area.id,
+            position: area.position || 'front',
+            width: area.width,
+            height: area.height
+          });
+        }
+      });
+    }
+    
+    console.log('Using print area contexts:', printAreaContexts);
     
     // Make API call to generate designs
     const response = await fetch('/.netlify/functions/generate-image', {
@@ -460,8 +441,7 @@ async function generateDesigns(prompt) {
       body: JSON.stringify({ 
         prompt, 
         numImages: 4,
-        width,
-        height
+        printAreaContexts: printAreaContexts.length > 0 ? printAreaContexts : undefined
       })
     });
     
@@ -469,23 +449,34 @@ async function generateDesigns(prompt) {
     console.log('Design generation response:', data);
     
     if (data.success && data.images && data.images.length > 0) {
-      // Store the generated designs
-      generatedDesigns = data.images.map((img, index) => ({
-        id: img.name || `design-${Date.now()}-${index}`,
-        url: img.url,
-        originalUrl: img.url,
-        printAreaContext: {
-          width,
-          height,
-          position: 'any' // This design can be used for any position
-        }
-      }));
+      // Store the generated designs with their correct dimensions from the response
+      generatedDesigns = data.images.map((img, index) => {
+        // Use the print area context from the response if available
+        const printAreaContext = img.printAreaContext || {
+          // If no context in response, use the context from our request based on index
+          ...(printAreaContexts[index % printAreaContexts.length] || {}),
+          position: 'any' // Fallback position
+        };
+        
+        return {
+          id: img.name || `design-${Date.now()}-${index}`,
+          url: img.url,
+          originalUrl: img.url,
+          width: img.width || printAreaContext.width,
+          height: img.height || printAreaContext.height,
+          printAreaContext: printAreaContext
+        };
+      });
       
       // Expose designs globally for the design gallery
       window.designGallery = generatedDesigns;
       
-      // Display the designs in the gallery
-      if (typeof window.displayGeneratedDesigns === 'function') {
+      // Display the designs in the gallery using our drag-and-drop implementation
+      if (typeof window.dragDropDisplayGeneratedDesigns === 'function') {
+        console.log('Using drag-drop implementation for generated designs');
+        window.dragDropDisplayGeneratedDesigns(generatedDesigns);
+      } else if (typeof window.displayGeneratedDesigns === 'function') {
+        console.log('Falling back to original displayGeneratedDesigns');
         window.displayGeneratedDesigns(generatedDesigns);
       }
       
@@ -814,7 +805,7 @@ function updateProductPreview() {
                   <!-- Product Preview Image -->
                   <div class="col-md-8">
                     <div class="product-preview-image position-relative mb-4 text-center">
-                      <img src="${selectedBlueprintImageUrl || 'https://via.placeholder.com/400x500?text=Product+Preview'}" 
+                      <img src="${selectedBlueprintImageUrl || 'https://placehold.co/400x500/EFEFEF/999999?text=Product+Preview'}" 
                            class="img-fluid border" alt="Product Preview - ${position}">
                       ${designsByPosition[position].map(design => `
                         <div class="design-overlay position-absolute" style="top: 30%; left: 30%; width: 40%; z-index: 10;">
@@ -913,7 +904,7 @@ function updateProductPreview() {
         <div class="card-body">
           <p>Assign designs to print areas to see your product preview here.</p>
           <div class="text-center mt-3">
-            <img src="${selectedBlueprintImageUrl || 'https://via.placeholder.com/400x300?text=No+Designs+Assigned'}" 
+            <img src="${selectedBlueprintImageUrl || 'https://placehold.co/400x300/EFEFEF/999999?text=No+Designs+Assigned'}" 
                  class="img-fluid border opacity-50" alt="Product Preview" style="max-height: 300px;">
             <p class="mt-3 text-muted">Generate designs and assign them to print areas using the design gallery below.</p>
           </div>
@@ -1591,7 +1582,14 @@ function restoreUIState() {
   }
   
   if (generatedDesigns && generatedDesigns.length > 0) {
-    displayGeneratedDesigns(generatedDesigns);
+    // Use our drag-and-drop implementation if available
+    if (typeof window.dragDropDisplayGeneratedDesigns === 'function') {
+      console.log('Using drag-drop implementation in restoreUIState');
+      window.dragDropDisplayGeneratedDesigns(generatedDesigns);
+    } else {
+      console.log('Using original implementation in restoreUIState');
+      displayGeneratedDesigns(generatedDesigns);
+    }
   }
   
   if (assignedDesigns && Object.keys(assignedDesigns).length > 0) {
@@ -1611,20 +1609,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // Load state from storage
   loadStateFromStorage();
   
-  // Use event delegation for design selection
-  const designsContainer = document.getElementById('generatedDesignsContainer');
-  if (designsContainer) {
-    designsContainer.addEventListener('click', function(event) {
-      const clickableImage = event.target.closest('.clickable-design');
-      if (clickableImage) {
-        const designId = clickableImage.dataset.designId;
-        console.log(`Select button clicked for design ID: ${designId}`);
-        if (designId) {
-          openPrintAreaSelectionModal(designId);
-        }
-      }
-    });
-  }
+  // No need for click event delegation with the new drag-and-drop approach
+  // The drag-and-drop functionality is handled in design-gallery-drag-drop.js
 
   // Setup event listeners with better error handling
   const verifyApiKeyBtn = document.getElementById('verifyApiKey');
@@ -2100,9 +2086,27 @@ async function generateDesigns(prompt, numImages = 4) {
     if (data.success && data.images && data.images.length > 0) {
       generatedDesigns = [...generatedDesigns, ...data.images];
       
-      displayGeneratedDesigns(data.images);
-      updateProductPreview();
-      updateCreateProductButton();
+      // Use our drag-and-drop implementation if available
+      if (typeof window.dragDropDisplayGeneratedDesigns === 'function') {
+        console.log('Using drag-drop implementation in generateDesigns');
+        window.dragDropDisplayGeneratedDesigns(data.images);
+      } else {
+        console.log('Using original implementation in generateDesigns');
+        displayGeneratedDesigns(data.images);
+      }
+      
+      // Update product preview and button
+      if (typeof window.updateProductPreview === 'function') {
+        window.updateProductPreview();
+      } else {
+        updateProductPreview();
+      }
+      
+      if (typeof window.updateCreateProductButton === 'function') {
+        window.updateCreateProductButton();
+      } else {
+        updateCreateProductButton();
+      }
       
       if (statusElement) {
         statusElement.innerHTML = `<div class="alert alert-success">${data.images.length} designs generated successfully! Select designs for each print area.</div>`;
@@ -2125,8 +2129,20 @@ async function generateDesigns(prompt, numImages = 4) {
   return [];
 }
 
-// Display generated designs in the design gallery
+// Display generated designs in the design gallery using our new drag-and-drop implementation
 function displayGeneratedDesigns(designs) {
+  console.log('App.js displayGeneratedDesigns called with:', designs);
+  
+  // Use our new drag-and-drop implementation if available
+  if (typeof window.dragDropDisplayGeneratedDesigns === 'function') {
+    console.log('Using drag-drop implementation');
+    window.dragDropDisplayGeneratedDesigns(designs);
+    return;
+  }
+  
+  // Fallback to original implementation if drag-drop not available
+  console.log('Fallback: Using original implementation');
+  
   const container = document.getElementById('generatedDesignsContainer');
   if (!container) {
     console.error('Generated designs container not found');
@@ -2184,9 +2200,10 @@ function displayGeneratedDesigns(designs) {
     gallery.appendChild(designCard);
   });
   
-  const designGallerySection = document.getElementById('designGallerySection');
-  if (designGallerySection) {
-    designGallerySection.style.display = 'block';
+  // Show the designs section
+  const designsSection = document.getElementById('generatedDesignsSection');
+  if (designsSection) {
+    designsSection.classList.remove('d-none');
   }
 }
 
@@ -2314,7 +2331,7 @@ function displayProducts(products) {
     
     const image = product.images && product.images.length > 0 ? 
       product.images[0].src : 
-      'https://via.placeholder.com/150';
+      'https://placehold.co/150/EFEFEF/999999';
     
     card.innerHTML = `
       <div class="card h-100">

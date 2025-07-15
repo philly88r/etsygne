@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 window.generateDesignForPrintArea = async function() {
   console.log('generateDesignForPrintArea function called');
+
   const promptInput = document.getElementById('modalDesignPrompt');
   const generationStatus = document.getElementById('modalGenerationStatus');
   const designSelectionContainer = document.getElementById('designSelectionContainer');
@@ -39,43 +40,112 @@ window.generateDesignForPrintArea = async function() {
     // Get the prompt value
     const prompt = promptInput.value.trim();
     console.log('Modal: Generating designs with prompt:', prompt);
+
+    // Get the selected print area dimensions if available
+    let width, height;
+    let printAreaId = window.selectedPrintAreaId;
+    console.log('Modal: Selected print area ID:', printAreaId);
+
+    // Method 1: Use our new utility function if available
+    if (printAreaId && window.getPrintAreaDimensions) {
+      console.log('Attempting to get dimensions using getPrintAreaDimensions utility...');
+      const dimensions = await window.getPrintAreaDimensions(printAreaId);
+      if (dimensions && dimensions.width && dimensions.height) {
+        width = dimensions.width;
+        height = dimensions.height;
+        console.log(`SUCCESS: Using dimensions from API utility: ${width}x${height} for area ${printAreaId}`);
+      } else {
+        console.log('Failed to get dimensions from getPrintAreaDimensions utility');
+      }
+    }
     
-    // Make API call to generate designs
+    // Method 2: Try to get dimensions from the print areas array (fallback)
+    if ((!width || !height) && printAreaId && window.printAreas) {
+      console.log('Attempting to get dimensions from window.printAreas...');
+      const selectedArea = window.printAreas.find(area => area.id === printAreaId);
+      if (selectedArea && selectedArea.width && selectedArea.height) {
+        width = selectedArea.width;
+        height = selectedArea.height;
+        console.log(`SUCCESS: Using dimensions from print areas array: ${width}x${height} for area ${printAreaId}`);
+      } else {
+        console.log('Failed to get dimensions from window.printAreas');
+      }
+    }
+    
+    // Method 3: Try to get dimensions from the selectedProduct object (another fallback)
+    if ((!width || !height) && printAreaId && window.selectedProduct) {
+      console.log('Attempting to get dimensions from window.selectedProduct...');
+      if (window.selectedProduct.placeholders) {
+        const placeholder = window.selectedProduct.placeholders.find(p => p.id === printAreaId || p.position === printAreaId);
+        if (placeholder && placeholder.width && placeholder.height) {
+          width = placeholder.width;
+          height = placeholder.height;
+          console.log(`SUCCESS: Using dimensions from selectedProduct placeholders: ${width}x${height} for area ${printAreaId}`);
+        } else {
+          console.log('Failed to get dimensions from window.selectedProduct.placeholders');
+        }
+      }
+    }
+
+    // Final check - if we still don't have valid dimensions, show an error
+    if (!width || !height || width === 0 || height === 0) {
+      console.error('ERROR: Failed to retrieve valid print area dimensions');
+      generationStatus.innerHTML = '<div class="alert alert-danger">Unable to determine print area dimensions. Please try again or select a different print area.</div>';
+      designSelectionContainer.innerHTML = '';
+      return;
+    }
+    
+    // Log the final dimensions being sent to the API
+    console.log(`FINAL DIMENSIONS: Sending ${width}x${height} to generate-image endpoint`);
+    
+    // Make API call to generate designs with the correct dimensions
     const response = await fetch('/.netlify/functions/generate-image', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ prompt, numImages: 4 })
+      body: JSON.stringify({
+        prompt,
+        numImages: 4,
+        width,
+        height,
+        printAreaId
+      })
     });
     
     const data = await response.json();
     console.log('Modal: Design generation response:', data);
     
     if (data.success && data.images && data.images.length > 0) {
-      // Store the generated designs in the global variable
+      // Store the generated designs in the global variable with print area dimensions
       window.generatedDesigns = data.images.map(img => ({
         url: img.url,
         name: img.name,
-        originalUrl: img.url
+        originalUrl: img.url,
+        printAreaContext: {
+          id: printAreaId,
+          width: width,
+          height: height
+        }
       }));
       
       // Clear the container
       designSelectionContainer.innerHTML = '';
       
-      // Display the designs in the modal
+      // Display the designs in the modal with dimensions
       window.generatedDesigns.forEach((design, index) => {
         const designCard = document.createElement('div');
         designCard.className = 'col-md-6 mb-3';
         designCard.innerHTML = `
-          <div class="card">
-            <img src="${design.url}" class="card-img-top design-thumbnail" alt="Generated Design ${index + 1}">
+          <div class="card h-100 design-card" data-design-index="${index}">
+            <div class="position-relative">
+              <img src="${design.url}" class="card-img-top" alt="Generated Design">
+              <span class="position-absolute top-0 end-0 badge bg-secondary m-2">
+                ${design.printAreaContext.width || 'auto'}×${design.printAreaContext.height || 'auto'}
+              </span>
+            </div>
             <div class="card-body">
-              <div class="d-grid">
-                <button type="button" class="btn btn-sm btn-primary select-design-btn" data-design-id="${design.name}">
-                  Select This Design
-                </button>
-              </div>
+              <button class="btn btn-sm btn-primary w-100 select-design-btn" data-design-id="${design.name}">Select This Design</button>
             </div>
           </div>
         `;
