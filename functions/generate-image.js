@@ -98,32 +98,20 @@ const handler = async function(event, context) {
     }
 
     const imagePromises = Array.from({ length: numImages }).map(async (_, i) => {
-      // Create a context object that prioritizes explicit width/height parameters
-      // Ensure width and height are numbers, not strings
-      const contextWidth = typeof width === 'string' ? parseInt(width) : width;
-      const contextHeight = typeof height === 'string' ? parseInt(height) : height;
-      
-      // Use the provided dimensions or fallback to context array or default
-      const context = {
-        width: contextWidth || (printAreaContexts[i % printAreaContexts.length]?.width) || 1024,
-        height: contextHeight || (printAreaContexts[i % printAreaContexts.length]?.height) || 1024,
-        position: (printAreaContexts[i % printAreaContexts.length]?.position) || 'front',
-        id: printAreaId || (printAreaContexts[i % printAreaContexts.length]?.id)
-      };
-      
-      // Convert dimensions to integers and apply reasonable constraints only if needed
-      // We want to use the exact print area dimensions when possible
-      const finalWidth = parseInt(context.width) || 1024;
-      const finalHeight = parseInt(context.height) || 1024;
-      
-      // Only constrain dimensions if they're outside the API's acceptable range
-      const apiMinDimension = 512;
-      const apiMaxDimension = 1536;
-      const constrainedWidth = finalWidth < apiMinDimension ? apiMinDimension : (finalWidth > apiMaxDimension ? apiMaxDimension : finalWidth);
-      const constrainedHeight = finalHeight < apiMinDimension ? apiMinDimension : (finalHeight > apiMaxDimension ? apiMaxDimension : finalHeight);
-      
-      console.log(`Generating image ${i+1} with dimensions: ${context.width}x${context.height}`);
-      console.log(`Original dimensions: ${finalWidth}x${finalHeight}, Constrained if needed: ${constrainedWidth}x${constrainedHeight}`);
+      // Directly use the context from the printAreaContexts array.
+      // This ensures we use the correct dimensions for each specific print area.
+      const context = printAreaContexts[i % printAreaContexts.length];
+      if (!context || !context.width || !context.height) {
+        // If context is invalid, skip this image generation.
+        console.warn(`Skipping image ${i+1} due to invalid print area context.`);
+        return null; 
+      }
+
+      // Use the exact dimensions from the print area context.
+      const finalWidth = parseInt(context.width);
+      const finalHeight = parseInt(context.height);
+
+      console.log(`Generating image ${i + 1} for '${context.position}' with dimensions: ${finalWidth}x${finalHeight}`);
       const enhancedPrompt = `${prompt} for the ${context.position} of a t-shirt`;
 
       // Generate image with Fal.ai
@@ -137,9 +125,9 @@ const handler = async function(event, context) {
           input: {
             prompt: enhancedPrompt,
             negative_prompt: 'low quality, blurry, distorted, text, watermark',
-            // Use the exact dimensions from the print area when possible, only constrain if outside API limits
-            width: constrainedWidth,
-            height: constrainedHeight,
+            // Use the exact dimensions from the print area context.
+            width: finalWidth,
+            height: finalHeight,
             num_inference_steps: 30,
             guidance_scale: 7.5,
             num_images: 1
