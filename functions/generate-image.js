@@ -55,7 +55,16 @@ const handler = async function(event, context) {
 
   try {
     console.log('Parsing request body...');
-    const { prompt, numImages = 3, width, height, printAreaId, printAreaContexts = [], apiKey = null } = JSON.parse(event.body);
+    const requestBody = JSON.parse(event.body);
+    const { prompt, width, height, printAreaId, printAreaContexts = [], apiKey = null } = requestBody;
+    
+    // Ensure numImages is always a number
+    let numImages = 3; // Default to 3 images
+    if (requestBody.numImages !== undefined) {
+      numImages = typeof requestBody.numImages === 'number' ? requestBody.numImages : parseInt(requestBody.numImages);
+      // If parsing fails or results in NaN, fallback to default
+      if (isNaN(numImages)) numImages = 3;
+    }
     console.log('Request parsed:', { 
       prompt: prompt.substring(0, 30) + '...', 
       numImages, 

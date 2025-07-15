@@ -467,7 +467,7 @@ exports.handler = async (event, context) => {
       
       // Use a default provider ID if one isn't provided
       // This ensures we can get print areas even without a specific provider
-      const defaultProviderId = '1'; // Default to the first provider
+      const defaultProviderId = '3'; // Default to provider ID 3 which works with blueprint ID 10
       const effectiveProviderId = providerId || defaultProviderId;
       try {
         console.log(`Fetching blueprint details for ID: ${blueprintId}`);
