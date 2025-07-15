@@ -2338,102 +2338,98 @@ function populateShopDropdown(shops) {
 }
 
 // Generate designs based on prompt
-async function generateDesigns(prompt, numImages = 4) {
-  if (!prompt) {
-    alert('Please enter a design description');
+async function generateDesigns(prompt, ...args) {
+  // This function now correctly handles two different call signatures:
+  // 1. Quick Generate: generateDesigns(prompt, numImages)
+  // 2. Main Generator: generateDesigns(prompt, id, width, height, position, statusId)
+  let options;
+
+  // Check if the second argument is a number, which indicates the Quick Generate call.
+  if (typeof args[0] === 'number' || args.length === 0) {
+    options = {
+      numImages: args[0] || 4, // Default to 4 images
+      statusElementId: 'generationStatus',
+      // For a general prompt, use all available print areas as context.
+      printAreaContexts: (printAreas && printAreas.length > 0) ? printAreas.map(area => ({ 
+          printAreaId: area.id, 
+          position: area.title.toLowerCase(), 
+          width: area.width, 
+          height: area.height 
+      })) : []
+    };
+  } else {
+    // Otherwise, it's the main generator call with specific print area details.
+    options = {
+      numImages: 4, // Always generate 4 images for the specific area
+      printAreaId: args[0],
+      width: args[1],
+      height: args[2],
+      position: args[3],
+      statusElementId: args[4]
+    };
+    // Create a specific context array for the single selected print area.
+    options.printAreaContexts = [{
+      printAreaId: options.printAreaId,
+      position: options.position,
+      width: options.width,
+      height: options.height
+    }];
+  }
+
+  const { numImages, statusElementId, printAreaContexts } = options;
+
+  if (!prompt || !prompt.trim()) {
+    alert('Please enter a design description.');
     return;
   }
-  
-  const statusElement = document.getElementById('generationStatus');
+
+  const statusElement = document.getElementById(statusElementId);
   if (statusElement) {
-    statusElement.innerHTML = '<div class="alert alert-info">Generating designs, please wait...</div>';
+    statusElement.innerHTML = '<div class="alert alert-info"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Generating designs, please wait...</div>';
+    statusElement.style.display = 'block';
   }
-  
+
   try {
-    console.log(`Generating ${numImages} designs with prompt: "${prompt}"`);
-    
-    currentDesignPrompt = prompt;
-    
-    let printAreaContexts = [];
-    
-    if (printAreas && printAreas.length > 0) {
-      printAreaContexts = printAreas.map(area => ({
-        printAreaId: area.id,
-        position: area.title ? area.title.toLowerCase() : 'unknown',
-        width: area.width || 1000,
-        height: area.height || 1000
-      }));
-    } else {
-      printAreaContexts = [{
-        printAreaId: selectedPrintAreaId || 'default',
-        position: selectedPrintAreaPosition || 'unknown',
-        width: selectedPrintAreaWidth || 1000,
-        height: selectedPrintAreaHeight || 1000
-      }];
-    }
-    
-    console.log('Using print area contexts:', printAreaContexts);
-    
+    console.log(`Generating ${numImages} designs for prompt: "${prompt}"`);
+    console.log('Sending print area contexts to backend:', printAreaContexts);
+
     const response = await fetch(`${API_BASE}/api?endpoint=generate-image`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         prompt: prompt,
         numImages: numImages,
         printAreaContexts: printAreaContexts,
-        apiKey: printifyApiKey
-      })
+        apiKey: printifyApiKey,
+      }),
     });
-    
+
     const data = await response.json();
     console.log('Design generation response:', data);
-    
+
     if (data.success && data.images && data.images.length > 0) {
       generatedDesigns = [...generatedDesigns, ...data.images];
-      
-      // Use our drag-and-drop implementation if available
+      // Display the new designs in the drag-and-drop gallery
       if (typeof window.dragDropDisplayGeneratedDesigns === 'function') {
-        console.log('Using drag-drop implementation in generateDesigns');
         window.dragDropDisplayGeneratedDesigns(data.images);
-      } else {
-        console.log('Using original implementation in generateDesigns');
-        displayGeneratedDesigns(data.images);
       }
-      
-      // Update product preview and button
-      if (typeof window.updateProductPreview === 'function') {
-        window.updateProductPreview();
-      } else {
-        updateProductPreview();
-      }
-      
-      if (typeof window.updateCreateProductButton === 'function') {
-        window.updateCreateProductButton();
-      } else {
-        updateCreateProductButton();
-      }
-      
       if (statusElement) {
-        statusElement.innerHTML = `<div class="alert alert-success">${data.images.length} designs generated successfully! Select designs for each print area.</div>`;
+        statusElement.innerHTML = `<div class="alert alert-success">Generated ${data.images.length} new designs!</div>`;
       }
-      
-      return data.images;
+      return data.images; // Return the generated images on success
     } else {
-      console.error('Error generating designs:', data.message || 'No images returned');
-      if (statusElement) {
-        statusElement.innerHTML = `<div class="alert alert-danger">Error generating designs: ${data.message || 'No designs were generated'}</div>`;
-      }
+      // Throw an error with the message from the server, or a default one.
+      throw new Error(data.message || 'No images were returned from the server.');
     }
   } catch (error) {
-    console.error('Error generating designs:', error);
+    console.error('Error in generateDesigns:', error);
     if (statusElement) {
-      statusElement.innerHTML = `<div class="alert alert-danger">Error generating designs: ${error.message}</div>`;
+      statusElement.innerHTML = `<div class="alert alert-danger"><strong>Generation Failed:</strong> ${error.message}</div>`;
     }
+    return []; // Return an empty array on failure
   }
-  
-  return [];
 }
 
 // Display generated designs in the design gallery using our new drag-and-drop implementation
