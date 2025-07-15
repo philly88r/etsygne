@@ -423,6 +423,41 @@ function initializePrintAreas() {
     // Add event listeners for drag and drop
     setupPrintAreaDragDrop(areaCard, area);
     
+    // Add click handler for the print area card to synchronize with dropdown
+    areaCard.addEventListener('click', function() {
+      // Update the dropdown selection
+      const printAreaSelector = document.getElementById('printAreaSelector');
+      if (printAreaSelector) {
+        printAreaSelector.value = area.id;
+        
+        // Trigger the change event to update the UI
+        const changeEvent = new Event('change');
+        printAreaSelector.dispatchEvent(changeEvent);
+      }
+      
+      // Update global variables
+      selectedPrintAreaId = area.id;
+      selectedPrintAreaWidth = area.placeholders && area.placeholders[0] ? area.placeholders[0].width : 1000;
+      selectedPrintAreaHeight = area.placeholders && area.placeholders[0] ? area.placeholders[0].height : 1000;
+      selectedPrintAreaPosition = area.position || 'front';
+      
+      // Update UI to show this card as selected
+      document.querySelectorAll('.print-area-card').forEach(card => {
+        if (card === areaCard) {
+          card.classList.add('selected-print-area');
+        } else {
+          card.classList.remove('selected-print-area');
+        }
+      });
+      
+      // Show the design generation section if it doesn't exist
+      if (!document.getElementById('designGenSection')) {
+        if (typeof showDesignGenerationSection === 'function') {
+          showDesignGenerationSection();
+        }
+      }
+    });
+    
     // Add event listener for remove design button
     const removeBtn = areaCard.querySelector('.remove-design-btn');
     if (removeBtn) {

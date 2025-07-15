@@ -1,3 +1,34 @@
+// Add CSS for the selected print area card
+document.addEventListener('DOMContentLoaded', function() {
+  // Create a style element
+  const style = document.createElement('style');
+  style.textContent = `
+    .print-area-card {
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    .selected-print-area {
+      border: 2px solid #007bff !important;
+      box-shadow: 0 0 10px rgba(0, 123, 255, 0.5) !important;
+      transform: translateY(-3px);
+    }
+    .print-area-card:hover {
+      border-color: #007bff;
+    }
+    #designGenSection {
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      margin-top: 20px;
+      margin-bottom: 20px;
+    }
+    #selectedPrintAreaInfo {
+      background-color: #e9f7fe !important;
+      border-color: #b3e0ff !important;
+    }
+  `;
+  document.head.appendChild(style);
+});
+
 // Global variables
 let printifyApiKey = null;
 let selectedShopId = '';
@@ -338,20 +369,65 @@ function showDesignGenerationSection() {
   designGenContainer.id = 'designGenSection';
   designGenContainer.className = 'mt-4 p-4 border rounded bg-light';
   
+  // Get print areas from the product data using the same logic as in design-gallery-drag-drop.js
+  // Check multiple possible sources for print area data
+  let localPrintAreas = [];
+  
+  if (window.currentBlueprintData && window.currentBlueprintData.print_areas) {
+    localPrintAreas = window.currentBlueprintData.print_areas;
+  } else if (window.printAreas) {
+    localPrintAreas = window.printAreas;
+  } else if (window.selectedProduct && window.selectedProduct.print_areas) {
+    localPrintAreas = window.selectedProduct.print_areas;
+  }
+  
+  console.log('Available print areas for dropdown:', localPrintAreas);
+  
+  // If no print areas found, create some defaults for testing
+  if (!localPrintAreas || localPrintAreas.length === 0) {
+    localPrintAreas = [
+      {
+        id: 'front',
+        title: 'Front',
+        placeholders: [{
+          width: 4000,
+          height: 5000,
+          position: { x: 2500, y: 2500 }
+        }]
+      },
+      {
+        id: 'back',
+        title: 'Back',
+        placeholders: [{
+          width: 4000,
+          height: 5000,
+          position: { x: 2500, y: 2500 }
+        }]
+      }
+    ];
+    console.log('Using default print areas for testing');
+    
+    // Update global printAreas variable
+    window.printAreas = localPrintAreas;
+    printAreas = localPrintAreas;
+  }
+  
   // Create print area options for the dropdown
   let printAreaOptions = '<option value="">Select a print area...</option>';
-  if (printAreas && printAreas.length > 0) {
-    printAreas.forEach(area => {
-      if (area && area.id) {
-        printAreaOptions += `<option value="${area.id}" 
-          data-width="${area.width || 1000}" 
-          data-height="${area.height || 1000}" 
-          data-position="${area.position || 'front'}">
-          ${area.title || 'Print Area'} (${area.width || 1000}×${area.height || 1000})
-        </option>`;
-      }
-    });
-  }
+  localPrintAreas.forEach(area => {
+    if (area && area.id) {
+      // Get dimensions from the first placeholder or use defaults
+      const width = area.placeholders && area.placeholders[0] ? area.placeholders[0].width : 1000;
+      const height = area.placeholders && area.placeholders[0] ? area.placeholders[0].height : 1000;
+      
+      printAreaOptions += `<option value="${area.id}" 
+        data-width="${width}" 
+        data-height="${height}" 
+        data-position="${area.position || 'front'}">
+        ${area.title || 'Print Area'} (${width}×${height})
+      </option>`;
+    }
+  });
   
   designGenContainer.innerHTML = `
     <h4 class="mb-3">Generate Designs for Print Area</h4>
@@ -396,38 +472,83 @@ function showDesignGenerationSection() {
   // Add event listener for print area dropdown
   const printAreaSelector = document.getElementById('printAreaSelector');
   if (printAreaSelector) {
-    printAreaSelector.addEventListener('change', function(e) {
-      const selectedOption = this.options[this.selectedIndex];
-      const printAreaId = this.value;
-      const generateBtn = document.getElementById('generateDesignsBtn');
-      const selectedPrintAreaInfo = document.getElementById('selectedPrintAreaInfo');
-      const selectedPrintAreaName = document.getElementById('selectedPrintAreaName');
-      const selectedPrintAreaDimensions = document.getElementById('selectedPrintAreaDimensions');
+    printAreaSelector.addEventListener('change', function(event) {
+      const selectedOption = printAreaSelector.options[printAreaSelector.selectedIndex];
+      const areaId = selectedOption.value;
       
-      if (printAreaId) {
+      if (areaId) {
+        // Get the selected print area from the available print areas
+        let selectedArea = null;
+        if (window.printAreas) {
+          selectedArea = window.printAreas.find(area => area.id === areaId);
+        }
+        
+        console.log('Selected print area:', selectedArea);
+        
+        // Get dimensions from the first placeholder if available
+        let width = parseInt(selectedOption.dataset.width) || 1000;
+        let height = parseInt(selectedOption.dataset.height) || 1000;
+        
+        if (selectedArea && selectedArea.placeholders && selectedArea.placeholders[0]) {
+          width = selectedArea.placeholders[0].width || width;
+          height = selectedArea.placeholders[0].height || height;
+        }
+        
         // Update global variables
-        selectedPrintAreaId = printAreaId;
-        selectedPrintAreaWidth = selectedOption.dataset.width || 1000;
-        selectedPrintAreaHeight = selectedOption.dataset.height || 1000;
+        selectedPrintAreaId = areaId;
+        selectedPrintAreaWidth = width;
+        selectedPrintAreaHeight = height;
         selectedPrintAreaPosition = selectedOption.dataset.position || 'front';
         
-        // Update UI
-        if (generateBtn) generateBtn.disabled = false;
-        if (selectedPrintAreaInfo) selectedPrintAreaInfo.classList.remove('d-none');
-        if (selectedPrintAreaName) selectedPrintAreaName.textContent = selectedOption.textContent.trim();
-        if (selectedPrintAreaDimensions) selectedPrintAreaDimensions.textContent = `${selectedPrintAreaWidth}×${selectedPrintAreaHeight}`;
+        console.log('Updated print area dimensions:', selectedPrintAreaWidth, 'x', selectedPrintAreaHeight);
         
-        console.log('Selected print area:', { 
-          id: selectedPrintAreaId, 
-          width: selectedPrintAreaWidth, 
-          height: selectedPrintAreaHeight, 
-          position: selectedPrintAreaPosition 
+        // Update the selected print area info display
+        const selectedPrintAreaInfo = document.getElementById('selectedPrintAreaInfo');
+        const selectedPrintAreaName = document.getElementById('selectedPrintAreaName');
+        const selectedPrintAreaDimensions = document.getElementById('selectedPrintAreaDimensions');
+        
+        if (selectedPrintAreaInfo && selectedPrintAreaName && selectedPrintAreaDimensions) {
+          selectedPrintAreaInfo.classList.remove('d-none');
+          selectedPrintAreaName.textContent = selectedArea ? selectedArea.title : selectedOption.textContent.trim();
+          selectedPrintAreaDimensions.textContent = `${selectedPrintAreaWidth}×${selectedPrintAreaHeight}`;
+        }
+        
+        // Enable the generate button
+        const generateBtn = document.getElementById('generateDesignsBtn');
+        if (generateBtn) {
+          generateBtn.disabled = false;
+        }
+        
+        // Also update the print area cards to show which one is selected
+        const printAreaCards = document.querySelectorAll('.print-area-card');
+        printAreaCards.forEach(card => {
+          if (card.dataset.areaId === areaId) {
+            card.classList.add('selected-print-area');
+          } else {
+            card.classList.remove('selected-print-area');
+          }
         });
       } else {
-        // Reset if no print area is selected
-        if (generateBtn) generateBtn.disabled = true;
-        if (selectedPrintAreaInfo) selectedPrintAreaInfo.classList.add('d-none');
+        // Reset selection if empty option selected
         selectedPrintAreaId = null;
+        
+        // Hide the selected print area info display
+        const selectedPrintAreaInfo = document.getElementById('selectedPrintAreaInfo');
+        if (selectedPrintAreaInfo) {
+          selectedPrintAreaInfo.classList.add('d-none');
+        }
+        
+        // Disable the generate button
+        const generateBtn = document.getElementById('generateDesignsBtn');
+        if (generateBtn) {
+          generateBtn.disabled = true;
+        }
+        
+        // Remove selection from all print area cards
+        const printAreaCards = document.querySelectorAll('.print-area-card');
+        printAreaCards.forEach(card => {
+          card.classList.remove('selected-print-area');
+        });
       }
     });
   }
