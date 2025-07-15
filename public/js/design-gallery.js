@@ -199,6 +199,12 @@ function displayGeneratedDesigns(images) {
     return;
   }
   
+  // Create a row for the designs
+  const designsRow = document.createElement('div');
+  designsRow.className = 'row g-3';
+  designGalleryContainer.innerHTML = '';
+  designGalleryContainer.appendChild(designsRow);
+  
   // Create the design workspace layout
   const workspaceHtml = `
     <div class="row mb-4">
@@ -208,12 +214,24 @@ function displayGeneratedDesigns(images) {
           <strong>Drag and drop</strong> designs onto print areas to assign them. Click the <strong>Preview</strong> tab to see your product.
         </div>
       </div>
+    </div>
+  `;
+  
+  // Add designs to the gallery
+  images.forEach(image => {
+    const designCard = document.createElement('div');
+    designCard.className = 'col-6 col-md-4';
+    designCard.innerHTML = `
+      <div class="card h-100 design-card" data-design-id="${image.id}">
+        <img src="${image.url}" class="card-img-top design-image" alt="${image.prompt || 'Generated design'}">
+        <div class="card-body">
+          <p class="card-text small text-truncate">${image.prompt || 'No prompt'}</p>
+          <button class="btn btn-sm btn-primary assign-design-btn">Assign to Print Area</button>
+        </div>
+      </div>
     `;
     
     designsRow.appendChild(designCard);
-    
-    
-    
   });
   
   // If no designs, show a message
@@ -602,7 +620,7 @@ function updatePrintAreaVisuals() {
           
           console.log('Design button clicked in design-gallery.js');
           // Scroll to design gallery
-          const designGallery = document.getElementById('designGallery');
+          const designGallery = document.querySelector('#designGallerySection #designGallery');
           if (designGallery) {
             designGallery.scrollIntoView({ behavior: 'smooth' });
           }
@@ -699,7 +717,7 @@ function updateProductPreview() {
         <div class="card-body text-center">
           <div class="product-preview-image position-relative">
             <!-- Base product image would go here -->
-            <img src="${selectedBlueprintImageUrl || 'https://via.placeholder.com/400x500?text=Product+Preview'}" class="img-fluid" alt="Product Preview">
+            <img src="${selectedBlueprintImageUrl || 'https://placehold.co/400x500/EFEFEF/999999?text=Product+Preview'}" class="img-fluid" alt="Product Preview">
             
             <!-- Overlay designs on their respective print areas -->
             ${Object.entries(selectedDesigns).map(([printAreaId, designId]) => {

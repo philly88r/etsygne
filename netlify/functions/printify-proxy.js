@@ -20,7 +20,7 @@ exports.handler = async function(event, context) {
 
   try {
     // Get API key from request headers
-    const apiKey = event.headers['x-printify-api-key'];
+    const apiKey = event.headers['x-printify-api-key'] || process.env.PRINTIFY_API_KEY;
     
     if (!apiKey) {
       return {
@@ -32,6 +32,27 @@ exports.handler = async function(event, context) {
 
     // Parse request body
     const requestBody = JSON.parse(event.body);
+    
+    // Support direct endpoint access for more flexibility
+    if (requestBody.endpoint) {
+      const { endpoint, method = 'GET', data = null } = requestBody;
+      
+      // Make the request to the specified endpoint
+      const response = await axios({
+        method,
+        url: `https://api.printify.com${endpoint}`,
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+        data: method !== 'GET' ? data : undefined
+      });
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(response.data)
+      };
+    }
+    
+    // Legacy action-based approach
     const { action, shopId } = requestBody;
 
     // Base URL for Printify API

@@ -293,14 +293,14 @@ function populateDesignGallery() {
  */
 function initializePrintAreas() {
   console.log('Initializing print areas for drag-drop');
-  
+
   // Get the print areas container from the existing HTML
   const printAreasContainer = document.getElementById('printAreasList');
   if (!printAreasContainer) {
     console.error('Print areas container not found');
     return;
   }
-  
+
   // Clear the container
   printAreasContainer.innerHTML = '';
   
@@ -354,6 +354,9 @@ function initializePrintAreas() {
     `;
     return;
   }
+  
+  // Store the print areas in the global variable for other components to use
+  window.printAreas = printAreas;
   
   // Update the print area count
   const printAreaCount = document.getElementById('printAreaCount');

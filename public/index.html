@@ -7,6 +7,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/design-drag-drop.css">
+  <link rel="stylesheet" href="css/design-gallery-drag-drop.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <style>
     .design-gallery {
@@ -208,7 +209,7 @@
               </div>
               <div id="generationStatus" class="mt-3"></div>
               <!-- Design gallery will be dynamically inserted here -->
-              <div id="designGallery" class="design-gallery"></div>
+              <div id="quickDesignGallery" class="design-gallery"></div>
             </div>
           </div>
         </div>
@@ -341,64 +342,81 @@
 
                     <!-- Print Areas Section -->
                     <div class="card mb-4" id="printAreasSection">
-                      <div class="card-header">
+                      <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="bi bi-printer me-2"></i>Print Areas & Design Assignment</h6>
+                        <span class="badge bg-light text-dark" id="printAreaCount">0 areas</span>
                       </div>
                       <div class="card-body">
-                        <p class="text-muted mb-3">
-                          <i class="bi bi-info-circle me-1"></i>
-                          Select a print area below, then generate and assign designs
-                        </p>
-                        <div id="printAreasList" class="border rounded p-3 bg-light">
+                        <div class="alert alert-info mb-3">
+                          <i class="bi bi-info-circle-fill me-2"></i>
+                          <strong>Drop zone:</strong> Drag designs from the gallery below and drop them onto print areas
+                        </div>
+                        <div id="printAreasList" class="print-areas border rounded p-3 bg-light">
                           <p class="text-muted mb-0">Select a product type to see available print areas</p>
                         </div>
                         
-                        <!-- Design Generation Interface for Selected Print Area -->
-                        <div id="designGenContainer" class="mt-4 border rounded p-4 bg-light" style="display: none;">
-                          <!-- Content will be dynamically generated when a print area is selected -->
-                        </div>
+                        <!-- Design generation will be handled by the drag-and-drop interface -->
                       </div>
                     </div>
 
                     <!-- Design Gallery Section -->
                     <div class="card mb-4" id="designGallerySection" style="display: none;">
-                      <div class="card-header">
+                      <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="bi bi-images me-2"></i>Generated Designs</h6>
+                        <div>
+                          <button type="button" class="btn btn-sm btn-outline-primary" id="undoBtn" disabled>
+                            <i class="bi bi-arrow-counterclockwise"></i> Undo
+                          </button>
+                          <button type="button" class="btn btn-sm btn-outline-primary ms-1" id="redoBtn" disabled>
+                            <i class="bi bi-arrow-clockwise"></i> Redo
+                          </button>
+                          <button type="button" class="btn btn-sm btn-outline-danger ms-1" id="clearAllBtn" disabled>
+                            <i class="bi bi-trash"></i> Clear All
+                          </button>
+                        </div>
                       </div>
                       <div class="card-body">
-                        <p class="text-muted mb-3">
-                          <i class="bi bi-info-circle me-1"></i>
-                          Click on a design to select it, then assign it to a print area
-                        </p>
+                        <div class="alert alert-info mb-3">
+                          <i class="bi bi-info-circle-fill me-2"></i>
+                          <strong>Drag and drop</strong> designs onto print areas to assign them. The design will automatically appear on your product.
+                        </div>
                         <div id="designGallery" class="row row-cols-2 row-cols-md-3 g-3">
                           <!-- Generated designs will appear here -->
-                        </div>
-                        <div class="mt-3">
-                          <button id="assignDesignBtn" class="btn btn-primary" disabled>
-                            <i class="bi bi-link me-1"></i>Assign Selected Design
-                          </button>
                         </div>
                       </div>
                     </div>
 
                     <!-- Product Preview -->
                     <div class="card mb-4" id="productPreview">
-                      <div class="card-header">
+                      <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="bi bi-eye me-2"></i>Product Preview</h6>
+                        <span class="badge bg-success" id="assignmentCount">0 assigned</span>
                       </div>
-                      <div class="card-body text-center" id="productPreviewContainer">
-                        <div class="text-muted">
-                          <i class="bi bi-image fs-1 d-block mb-2"></i>
-                          <p>Assign designs to print areas to see a preview</p>
+                      <div class="card-body" id="productPreviewContainer">
+                        <div class="product-preview position-relative">
+                          <!-- Base product image -->
+                          <img id="baseProductImage" src="" alt="Product Base" class="img-fluid mx-auto d-block" style="max-height: 300px;" />
+                          
+                          <!-- Design overlay container -->
+                          <div id="designOverlay" class="position-absolute" style="top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></div>
+                          
+                          <!-- Preview message -->
+                          <p id="previewMessage" class="text-center mt-2 text-muted">Drag designs onto print areas to see a preview</p>
                         </div>
                       </div>
                     </div>
                     
-                    <!-- Submit Button -->
-                    <div class="d-grid">
-                      <button type="submit" class="btn btn-primary btn-lg" id="createProductBtn" disabled>
-                        <i class="bi bi-plus-circle me-2"></i>Assign designs first
+
+                    
+                    <!-- Publish Button -->
+                    <div class="d-grid gap-2">
+                      <button type="button" class="btn btn-success btn-lg" id="publishProductBtn" disabled>
+                        <i class="bi bi-cloud-upload me-2"></i>Publish Product
                       </button>
+                      <div class="alert alert-info small" id="publishInfo">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        Assign designs to all print areas before publishing
+                      </div>
                     </div>
                   </form>
                 </div>
@@ -484,17 +502,22 @@
 
     <!-- Print Area Selection Modal -->
     <div class="modal fade" id="printAreaSelectionModal" tabindex="-1" aria-labelledby="printAreaSelectionModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="printAreaSelectionModalLabel">Select a Print Area</h5>
+            <h5 class="modal-title" id="printAreaSelectionModalLabel">
+              <i class="bi bi-grid me-2"></i>Select Print Area
+            </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <div class="modal-body" id="modalPrintAreasList">
-            <!-- Print areas will be dynamically inserted here -->
+          <div class="modal-body">
+            <p>Choose which print area to assign this design to:</p>
+            <div id="printAreaSelectionContainer" class="row"></div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              <i class="bi bi-x-circle me-1"></i>Cancel
+            </button>
           </div>
         </div>
       </div>
@@ -546,7 +569,7 @@
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
               <i class="bi bi-clock me-1"></i>Publish Later
             </button>
-            <button type="button" class="btn btn-primary" id="publishProductBtn">
+            <button type="button" class="btn btn-primary" id="publishNowBtn">
               <i class="bi bi-rocket me-1"></i>Publish Now
             </button>
           </div>
@@ -589,66 +612,8 @@
       </div>
     </div>
 
-    <!-- Print Area Selection Modal -->
-    <div class="modal fade" id="printAreaSelectionModal" tabindex="-1" aria-labelledby="printAreaSelectionModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="printAreaSelectionModalLabel">
-              <i class="bi bi-grid me-2"></i>Select Print Area
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <p>Choose which print area to assign this design to:</p>
-            <div id="printAreaSelectionContainer" class="row"></div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              <i class="bi bi-x-circle me-1"></i>Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
     
-    <!-- Publish Success Modal -->
-    <div class="modal fade" id="publishSuccessModal" tabindex="-1" aria-labelledby="publishSuccessModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header bg-success text-white">
-            <h5 class="modal-title" id="publishSuccessModalLabel">
-              <i class="bi bi-check-circle me-2"></i>Designs Published Successfully
-            </h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <div class="text-center mb-4">
-              <div class="display-1 text-success mb-3">
-                <i class="bi bi-check-circle-fill"></i>
-              </div>
-              <h4>Your designs have been published!</h4>
-              <p class="text-muted">Your product with the assigned designs has been successfully published to your store.</p>
-            </div>
-            <div class="alert alert-info">
-              <i class="bi bi-info-circle me-2"></i>
-              <strong>What's next?</strong> You can now view your product in your store dashboard or create another product.
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              <i class="bi bi-x-circle me-2"></i>Close
-            </button>
-            <button type="button" class="btn btn-primary" id="createAnotherProductBtn" data-bs-dismiss="modal">
-              <i class="bi bi-plus-circle me-2"></i>Create Another Product
-            </button>
-            <a href="#" class="btn btn-success" id="viewProductBtn">
-              <i class="bi bi-eye me-2"></i>View in Store
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Publish Success Modal is created dynamically in publish-product.js -->
     
     <!-- Loading Overlay (for full page loading states) -->
     <div id="loadingOverlay" class="position-fixed top-0 start-0 w-100 h-100" style="background: rgba(0,0,0,0.5); z-index: 9999; display: none;">
@@ -665,125 +630,22 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="local-api-helper.js?v=2.0"></script>
+    <!-- Printify API utilities for accurate print area dimensions -->
+    <script src="js/printify-api.js?v=1.0"></script>
     <script src="js/design-gallery-drag-drop.js"></script>
+    <script src="js/publish-product.js"></script>
     <script src="app.js?v=2.0"></script>
     <!-- New drag-and-drop implementation replaces the old design gallery -->
     <script src="js/modal-functions.js?v=2.0"></script>
 
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('Inline script loaded. Attaching design gallery listener.');
-      const gallery = document.getElementById('generatedDesigns');
-      if (gallery) {
-        gallery.addEventListener('click', handleDesignSelection);
-      } else {
-        console.log('Generated designs container not found on page load.');
-      }
-    });
-
-    function displayGeneratedDesigns(designs) {
-      const gallery = document.getElementById('generatedDesigns');
-      if (!gallery) return;
-      gallery.innerHTML = '';
-      if (!designs || designs.length === 0) {
-        gallery.innerHTML = '<div class="col-12"><div class="alert alert-info">No designs generated.</div></div>';
-        return;
-      }
-      designs.forEach(design => {
-        const col = document.createElement('div');
-        col.className = 'col-md-3 mb-4';
-        const card = document.createElement('div');
-        card.className = 'card design-card h-100';
-        card.dataset.designUrl = design.url;
-        card.dataset.originalUrl = design.original_url || design.url;
-        card.dataset.designId = design.id;
-        card.innerHTML = `
-          <img src="${design.url}" class="card-img-top" alt="Generated Design">
-          <div class="card-body text-center">
-            <button type="button" class="btn btn-sm btn-primary select-design-btn">Select</button>
-          </div>`;
-        col.appendChild(card);
-        gallery.appendChild(col);
-      });
-    }
-
-    function handleDesignSelection(event) {
-      if (event.target.classList.contains('select-design-btn')) {
-        event.preventDefault();
-        // Only stop propagation for form elements
-        if (event.target.form) {
-          event.stopPropagation();
-        }
-        
-        console.log('Design button clicked in index.html');
-        const card = event.target.closest('.design-card');
-        if (!card) return;
-        document.querySelectorAll('.design-card').forEach(c => c.classList.remove('active'));
-        card.classList.add('active');
-        selectedDesignUrl = card.dataset.designUrl;
-        selectedDesignOriginalUrl = card.dataset.originalUrl;
-        selectedDesignId = card.dataset.designId;
-        console.log('Selected design:', { url: selectedDesignUrl, originalUrl: selectedDesignOriginalUrl, id: selectedDesignId });
-        
-        // If print areas exist, try to assign to the first one
-        const printAreas = document.querySelectorAll('.print-area-item');
-        console.log('Found print area items in index.html:', printAreas.length);
-        
-        if (printAreas && printAreas.length > 0) {
-          const firstArea = printAreas[0];
-          const areaId = firstArea.getAttribute('data-print-area-id');
-          console.log('Found print area with ID:', areaId);
-          
-          // Use the title from the heading if available
-          const areaHeading = firstArea.querySelector('h6');
-          const position = areaHeading ? areaHeading.textContent.toLowerCase() : 'front';
-          
-          console.log(`Auto-selecting print area: ${areaId}, position: ${position}`);
-          selectedPrintAreaId = areaId;
-          selectedPrintAreaPosition = position;
-          
-          // If assignDesignToPrintArea function exists, call it
-          if (typeof assignDesignToPrintArea === 'function') {
-            assignDesignToPrintArea(areaId, position, firstArea, event);
-          }
-        }
-        
-        updateProductPreview();
-        if (typeof saveStateToStorage === 'function') {
-          saveStateToStorage();
-        }
-        updateCreateProductButton();
-      }
-    }
-
-    function updateProductPreview() {
-      const previewContainer = document.getElementById('productPreviewContainer');
-      if (!previewContainer) return;
-      if (selectedDesignUrl) {
-        previewContainer.innerHTML = `
-          <div class="text-center">
-            <img src="${selectedDesignUrl}" class="img-fluid rounded shadow" style="max-height: 200px;" alt="Product Preview">
-            <p class="mt-2 text-muted">Preview of selected design</p>
-          </div>`;
-      } else {
-        previewContainer.innerHTML = `
-          <div class="text-muted">
-            <i class="bi bi-image fs-1 d-block mb-2"></i>
-            <p>Assign designs to print areas to see a preview</p>
-          </div>`;
-      }
-    }
-
-    function updateCreateProductButton() {
-      const createBtn = document.getElementById('createProductBtn');
-      if (!createBtn) return;
-      const hasBlueprint = document.getElementById('blueprintSelect')?.value;
-      const hasProvider = document.getElementById('providerSelect')?.value;
-      const hasDesign = selectedDesignUrl;
-      if (hasBlueprint && hasProvider && hasDesign) {
-        createBtn.disabled = false;
-      } else {
-        createBtn.disabled = true;
+    // This function is kept for backward compatibility
+    // It redirects to our new drag-and-drop implementation
+    function inlineDisplayGeneratedDesigns(designs) {
+      console.log('The inline displayGeneratedDesigns is deprecated. Using drag-and-drop instead.');
+      // Our new implementation in design-gallery-drag-drop.js will handle this
+      if (typeof window.dragDropDisplayGeneratedDesigns === 'function') {
+        window.dragDropDisplayGeneratedDesigns(designs);
       }
     }
   </script>

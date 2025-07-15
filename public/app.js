@@ -453,15 +453,15 @@ function showDesignGenerationSection() {
     </div>
     
     <div class="mb-3">
-      <label for="designPrompt" class="form-label">Design Description</label>
-      <textarea id="designPrompt" class="form-control" rows="4" placeholder="Describe the design you want to generate..."></textarea>
+      <label for="mainDesignPrompt" class="form-label">Design Description</label>
+      <textarea id="mainDesignPrompt" class="form-control" rows="4" placeholder="Describe the design you want to generate..."></textarea>
     </div>
     
     <button id="generateDesignsBtn" type="button" class="btn btn-primary btn-lg w-100" disabled>
       <i class="bi bi-magic"></i> Generate Designs for Selected Print Area
     </button>
     
-    <div id="generationStatus" class="mt-3"></div>
+    <div id="mainGenerationStatus" class="mt-3"></div>
     <div id="designGalleryContainer" class="mt-4"></div>
   `;
   
@@ -470,7 +470,7 @@ function showDesignGenerationSection() {
     printAreasList.after(designGenContainer);
   }
   
-  const promptTextarea = document.getElementById('designPrompt');
+  const promptTextarea = document.getElementById('mainDesignPrompt');
   if (promptTextarea) {
     // Set initial value from the textarea
     currentDesignPrompt = promptTextarea.value;
@@ -576,8 +576,8 @@ function showDesignGenerationSection() {
   const generateBtn = document.getElementById('generateDesignsBtn');
   if (generateBtn) {
     generateBtn.addEventListener('click', function(event) {
-      // Get the current value directly from the textarea
-      const promptTextarea = document.getElementById('designPrompt');
+      // Get the current value directly from the textarea using the new ID
+      const promptTextarea = document.getElementById('mainDesignPrompt');
       if (!promptTextarea) {
         alert('Design prompt textarea not found.');
         return;
@@ -601,12 +601,15 @@ function showDesignGenerationSection() {
       generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Generating...';
       
       // Pass the selected print area information to the generateDesigns function
+      // Pass all required print area parameters to ensure proper sizing
+      // Also pass the correct status element ID for our main design generation section
       generateDesigns(
         designPrompt.trim(), 
         selectedPrintAreaId, 
         selectedPrintAreaWidth, 
         selectedPrintAreaHeight, 
-        selectedPrintAreaPosition
+        selectedPrintAreaPosition,
+        'mainGenerationStatus'
       ).finally(() => {
         generateBtn.disabled = false;
         generateBtn.innerHTML = '<i class="bi bi-magic"></i> Generate Designs for Selected Print Area';
@@ -622,12 +625,12 @@ function showDesignGenerationSection() {
 }
 
 // Generate designs using the provided prompt and print area information
-async function generateDesigns(prompt, printAreaId, width, height, position) {
+async function generateDesigns(prompt, printAreaId, width, height, position, statusElementId = 'generationStatus') {
   console.log(`Generating designs with prompt: ${prompt} for print area ${printAreaId} (${width}x${height})`);
-  const generationStatus = document.getElementById('generationStatus');
+  const generationStatus = document.getElementById(statusElementId);
   
   if (!generationStatus) {
-    console.error('Generation status element not found');
+    console.error(`Generation status element with ID '${statusElementId}' not found`);
     return;
   }
   
