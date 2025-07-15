@@ -1,4 +1,4 @@
-// Add CSS for the selected print area card
+// Add CSS for the selected print area card and set up the page
 document.addEventListener('DOMContentLoaded', function() {
   // Create a style element
   const style = document.createElement('style');
@@ -27,6 +27,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   `;
   document.head.appendChild(style);
+  
+  // Automatically show the design generation section after the print areas are loaded
+  setTimeout(() => {
+    if (typeof showDesignGenerationSection === 'function' && !document.getElementById('designGenSection')) {
+      console.log('Automatically showing design generation section');
+      showDesignGenerationSection();
+    }
+  }, 1000);
 });
 
 // Global variables
